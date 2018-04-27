@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# Following parameters must be passed to this script:
+#
+# $1 - If the deployment should be 'prelive' or 'live'
+#
+# Following Variables must be declared in the calling Jenkins Job:
+#
+# $JENKINS_HOME     - The Jenkins home directory
+# $WORKSPACE        - The workspace containing the repo clone
+# $REPO_LABEL       - The label of the git repository used in ACI.
+# $ARTIFACT_NAME    - The name of the Ansible subdirectory (to roles or playbook) to test
+# $ROLES_PATH       - The value of the ansible_roles variable used in the ansible.cfg
+# $LOG_STDOUTERR    - This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console.
+# $ANSIBLE_VERBOSE  - This variable can be set by the user to make Ansible output more verbose (-vvv).
+
+PLAYBOOK_FAILED=true
+# get the working dir of the script
+BASEDIR=$(dirname "$0")
+# translate the parameter into a comprehensible variable
+PLAYBOOKDIR="${WORKSPACE}/${ARTIFACTS_PATH}/${ARTIFACT_NAME}"
+
+VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.vaultpass"
+BECOME_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.becomepass"
+
+if [[ $ANSIBLE_VERBOSE = 'true' ]]; then
+  ansible_verbosity='-vvv'
+fi
+
+if [[ $1 == 'live' ]]; then
+  TEXT='Live'
+  INVENTORY_FILE="${PLAYBOOKDIR}/aci/live/inventory"
+elif [[ $1 == 'prelive' ]]; then
+  TEXT='Pre-Live'
+  INVENTORY_FILE="${PLAYBOOKDIR}/aci/pre-live/inventory"
+else
+  echo "Run script with 'live' or 'prelive'"
+fi
+
+# BEGIN DECLARE FUNCTIONS
+
+function execute_ansible(){
+
+  playbook_file_name=$1
+  echo -e '\n\n'
+  echo "=========================================================================="
+  echo "= Deploy ${TEXT} Playbook ${ARTIFACT_NAME}/$(basename $PLAYBOOKDIR)/${playbook_file_name}"
+  echo "=========================================================================="
+
+  # run playbook
+  if [[ -f ${BECOME_PASSWORD_FILE} ]] && [[ -f ${VAULT_PASSWORD_FILE} ]]; then
+    ANSIBLE_HOST_KEY_CHECKING=false ANSIBLE_FORCE_COLOR=true ansible-playbook $ansible_verbosity --extra-vars "ansible_become_pass=$(cat $BECOME_PASSWORD_FILE)" --vault-password-file "${VAULT_PASSWORD_FILE}" "$playbook_file_name" | tee ansibleciout.txt
+  elif [[ -f ${BECOME_PASSWORD_FILE} ]]; then
+    ANSIBLE_HOST_KEY_CHECKING=false ANSIBLE_FORCE_COLOR=true ansible-playbook $ansible_verbosity --extra-vars "ansible_become_pass=$(cat $BECOME_PASSWORD_FILE)" "$playbook_file_name" | tee ansibleciout.txt
+  elif [[ -f ${VAULT_PASSWORD_FILE} ]]; then
+    ANSIBLE_HOST_KEY_CHECKING=false ANSIBLE_FORCE_COLOR=true ansible-playbook $ansible_verbosity --vault-password-file "${VAULT_PASSWORD_FILE}" "$playbook_file_name" | tee ansibleciout.txt
+  else
+    ANSIBLE_HOST_KEY_CHECKING=false ANSIBLE_FORCE_COLOR=true ansible-playbook $ansible_verbosity "$playbook_file_name" | tee ansibleciout.txt
+  fi
+
+  # evaluate results
+  grep -q 'unreachable=0\s*failed=0' ansibleciout.txt; rc=$?
+  if [[ $rc == 0 ]]; then
+    PLAYBOOK_FAILED=false
+    STEP_FAILED=true
+  fi
+
+  rm ansibleciout.txt
+}
+
+# END DECLARE FUNCTIONS
+
+cd "${PLAYBOOKDIR}"
+
+# PREPARATION START
+
+# set ansible human log
+if [[ $LOG_STDOUTERR = 'true' ]]; then
+  cp "${BASEDIR}/human_log.py" /usr/local/lib/python2.7/dist-packages/ansible/plugins/callback/human_log.py
+fi
+
+# set correct roles_path in ansible.cfg
+if [[ -f ansible.cfg ]]; then
+  cp ansible.cfg ansible.cfg.bak
+  sed -i "s@^roles_path.*@roles_path = ${ROLES_PATH}@g" ansible.cfg
+  sed -i "s/^inventory.*/inventory = inventory/g" ansible.cfg
+else
+  echo -e "[defaults]\nroles_path = ${ROLES_PATH}\ninventory = inventory" > ansible.cfg
+fi
+
+# Apply inventory file for pre-live environment
+if [[ -f $INVENTORY_FILE ]]; then
+  if [[ -f inventory ]]; then
+    mv inventory inventory.bak
+  fi
+  cp "$INVENTORY_FILE" .
+fi
+
+# PREPARATION END
+
+# RUN DEPLOYMENT
+
+echo "Run all Playbooks in $PLAYBOOKDIR"
+STEP_FAILED=false
+
+if [[ -f "aci/playbooks" ]]; then
+  playbooknames=($(cat "aci/playbooks"))
+else
+  playbooknames=('site.yml')
+fi
+
+for PLAYBOOKFILE in "${playbooknames[@]}"; do
+  if [[ $STEP_FAILED = 'true' ]]; then
+    break
+  fi
+  execute_ansible "$PLAYBOOKFILE"
+done
+
+# FINAL CLEANUP START
+
+if [[ $LOG_STDOUTERR = 'true' ]]; then
+  rm /usr/local/lib/python2.7/dist-packages/ansible/plugins/callback/human_log.py
+fi
+
+rm ansible.cfg
+if [[ -f ansible.cfg.bak ]]; then
+  mv ansible.cfg.bak ansible.cfg
+fi
+
+if [[ -f $INVENTORY_FILE ]]; then
+  rm inventory
+  if [[ -f inventory.bak ]]; then
+    mv inventory.bak inventory
+  fi
+fi
+
+# FINAL CLEANUP END
+
+if [[ $PLAYBOOK_FAILED = 'true' ]]; then
+  exit 1
+fi

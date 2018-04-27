@@ -1,0 +1,40 @@
+---
+## example for development repository definition
+#aci_repository:
+#  - group: defaultRoles
+#  - group: defaultPlaybooks
+#    roles_path_from:
+#      - defaultRoles
+
+## example for servers repository definition
+#aci_repository:
+#    # ein Referenzname
+#  - group: example
+#    # (optional) ein anderer Name als der des Repository-Ordners
+#    name: alternate-repo-name
+#    # Die vollständige URL des Repositories
+#    url: "ssh://<user>@<repo-server-url>:<port>/<pathto>/<repository>.git"
+#    # Der SSH-Key zum Anmelden am Repository
+#    id_rsa: "{{ ID_RSA_EXAMPLE }}"
+#    # Alternativ kann Benutzername/Passwort angegeben werden, wobei der SSH-Key
+#    # Vorrang hat, falls beide Angaben vorhanden sind
+#    username: maxmuster
+#    password: changeme
+#    # Der zu testende Branch des Repositories
+#    branch: testing # 'master' is default
+#    # Der Pfad innerhalb des Repositories zu den Roles
+#    subpath_roles: None
+#    # Der Pfad innerhalb des Repositories zu den Playbooks
+#    subpath_playbooks: None
+#    # (optional) Die Repositories, aus welchem die Roles für die Playbooks kommen
+#    roles_path_from:
+#      - example # optional if roles repository is the same as playbook repository group
+
+# Den Nutzer, den AnsibleCI gegenüber dem Git Repository einnimmt
+aci_repository_global_user_name: AnsibleCI
+# Die E-Mail-Adresse, die AnsibleCI gegenüber dem Git Repository einnimmt
+aci_repository_global_user_email: "{{ aci_admin_email }}"
+
+# Set to 'true' if you want to authenticate with the AWS IAM role of the
+# machine the ACI is running on
+aci_repository_use_aws_credential_helper: false

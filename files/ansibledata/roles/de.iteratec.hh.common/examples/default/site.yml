@@ -1,0 +1,5 @@
+- name: executing the common's role on the target host
+  hosts: target
+  roles:
+    - role: de.iteratec.hh.common
+      apt_cache_valid_time: 3600

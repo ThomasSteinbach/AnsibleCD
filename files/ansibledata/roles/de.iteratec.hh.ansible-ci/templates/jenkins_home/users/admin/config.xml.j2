@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<user>
+  <fullName>{{ aci_admin_name }}</fullName>
+  <properties>
+    <hudson.model.PaneStatusProperties>
+      <collapsed/>
+    </hudson.model.PaneStatusProperties>
+    <jenkins.security.ApiTokenProperty>
+      <apiToken>HWImhB5R+ssG5IJdEhlswZUQgPDvgkn75okNO7ju7K0EYbpzgHdXdq6OUxOFxxXa</apiToken>
+    </jenkins.security.ApiTokenProperty>
+    <hudson.model.MyViewsProperty>
+      <views>
+        <hudson.model.AllView>
+          <owner class="hudson.model.MyViewsProperty" reference="../../.."/>
+          <name>Alle</name>
+          <filterExecutors>false</filterExecutors>
+          <filterQueue>false</filterQueue>
+          <properties class="hudson.model.View$PropertyList"/>
+        </hudson.model.AllView>
+      </views>
+    </hudson.model.MyViewsProperty>
+    <hudson.search.UserSearchProperty>
+      <insensitiveSearch>false</insensitiveSearch>
+    </hudson.search.UserSearchProperty>
+    <com.cloudbees.plugins.credentials.UserCredentialsProvider_-UserCredentialsProperty plugin="credentials@1.24">
+      <domainCredentialsMap class="hudson.util.CopyOnWriteMap$Hash"/>
+    </com.cloudbees.plugins.credentials.UserCredentialsProvider_-UserCredentialsProperty>
+    {% if aci_install_type == 'server' %}
+    <hudson.security.HudsonPrivateSecurityRealm_-Details>
+      <passwordHash>{{ lookup('password', '/tmp/passui chars=ascii_letters,digits length=8') + ':' + (ACI_ADMIN_PASSWORD + '{' + lookup('password', '/tmp/passui chars=ascii_letters,digits length=8') + '}')|hash('sha256') }}</passwordHash>
+    </hudson.security.HudsonPrivateSecurityRealm_-Details>
+    {% else %}
+    <hudson.security.HudsonPrivateSecurityRealm_-Details/>
+    {% endif %}
+    <hudson.tasks.Mailer_-UserProperty plugin="mailer@1.16">
+      <emailAddress>{{ aci_admin_email }}</emailAddress>
+    </hudson.tasks.Mailer_-UserProperty>
+  </properties>
+</user>

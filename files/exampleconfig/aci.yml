@@ -1,0 +1,61 @@
+---
+
+# General configuration
+# =====================
+
+# could be [server,development]
+# development means to have ACI gathering data directly from a dev computer
+# instead of repositories (see documentation)
+aci_install_type: development
+
+# Admin name for the AnsibleCI GUI
+aci_admin_name: Admin
+# Admin password for the AnsibleCI GUI
+# is 'ACI_ADMIN_PASSWORD' in the Vault
+
+# If ACI is behind a proxy
+# also mention acia_proxy_url in agents.yml
+aci_proxy_url: None
+
+# Proxy URL for git, which would override aci_proxy_url,
+# also when beeing just an empty string:
+aci_git_proxy_url: None
+# Proxy URL for aws cli, which would override aci_proxy_url,
+# also when beeing just an empty string:
+aci_awscli_proxy_url: None
+
+# Server specific configuration
+# =============================
+
+# The protocol the AnsibleCI Server is reachable (http/https)
+aci_server_protocol: 'http'
+# The Domain of the AnsibleCI Server (e.g. example.com)
+aci_server_domain: localhost
+# The IP address of the AnsibleCI Server
+aci_server_ip: 127.0.0.1
+# The port on the AnsibleCI Server under which Jenkins is reachable
+aci_server_port: 24680
+
+# Diese Zahl limitiert die Anzahl der gleichzeitig zu testenden Roles.
+# Sollen mehr Roles verarbeitet werden, muss die Zahl höher gesetzt werden,
+# da sich die Role-Jobs ansonsten gegenseitig blockieren (deadlock!).
+aci_executor_count: 5
+
+# Ob nach dem Scannen der Repositories automatisch die Tests angestoßen werden.
+# Wird nur bei aci_install_type=server ausgewertet.
+aci_autostart_pipeline: true
+
+# mail configuration
+aci_admin_email: admin@ansibleci.de
+aci_smtp_host: localhost
+aci_smtp_port: 25
+aci_smtp_auth_user: "{{ aci_admin_email }}"
+aci_smtp_auth_password: "{{ SMTP_PASSWORD_HASH |default('') }}"
+aci_smtp_reply_to: "{{ aci_admin_email }}"
+
+# Test specific configuration
+# ===========================
+
+# A list of ansible-lint IDs to be excluded
+aci_lint_skip_list:
+  - ANSIBLE0004

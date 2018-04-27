@@ -1,0 +1,13 @@
+build-blocker-plugin:1.7.3
+git:2.4.3
+git-client:1.19.6
+scm-api:1.1
+job-dsl:1.43
+parameterized-trigger:2.30
+simple-theme-plugin:0.3
+jenkins-multijob-plugin:1.21
+token-macro:1.12.1
+conditional-buildstep:1.3.3
+run-condition:1.0
+envinject:1.92.1
+ansicolor:0.4.2

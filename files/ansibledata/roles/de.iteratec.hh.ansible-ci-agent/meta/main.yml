@@ -1,0 +1,14 @@
+---
+dependencies:
+  - role: de.iteratec.hh.common
+  - role: de.iteratec.hh.docker-mirror
+    dmirror_restart_policy: "{{ 'always' if aci_install_type == 'server' else 'no' }}"
+    dmirror_home: "{{ DMIRROR_HOME }}"
+    dmirror_domain: "{{ ACIA_INTERNAL_IP }}"
+    dmirror_ip: "{{ ACIA_INTERNAL_IP }}"
+    dmirror_port: "{{ acia_dmirror_port }}"
+    dmirror_pki_password: "{{ PKI_PASSWORD }}"
+    dmirror_pki_countrycode: ""
+    dmirror_pki_state: ""
+    dmirror_pki_locality: ""
+    dmirror_pki_organization: "AnsibleCI"

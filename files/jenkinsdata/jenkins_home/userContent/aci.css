@@ -1,0 +1,20 @@
+@charset "utf-8";
+
+#header {
+  background-color: black;
+  height: 34px;
+}
+
+#jenkins-head-icon {
+  content:url("/userContent/aci.png");
+  height: 32px;
+  top: 1px;
+}
+
+#jenkins-name-icon {
+  display: none;
+}
+
+footer {
+  display: none;
+}

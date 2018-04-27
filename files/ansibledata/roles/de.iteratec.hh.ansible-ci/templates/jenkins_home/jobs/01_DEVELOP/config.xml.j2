@@ -1,0 +1,269 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.plugins.buildblocker.BuildBlockerProperty plugin="build-blocker-plugin@1.7.3">
+      <useBuildBlocker>true</useBuildBlocker>
+      <blockLevel>NODE</blockLevel>
+      <scanQueueFor>DISABLED</scanQueueFor>
+      <blockingJobs>02_RUN_PIPELINE_{{ item.group }}</blockingJobs>
+    </hudson.plugins.buildblocker.BuildBlockerProperty>
+  </properties>
+  {% if aci_install_type == 'server' %}
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@2.4.1">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>{{ item.url }}</url>
+        <credentialsId>{{ item.group + (item.name | default('')) }}</credentialsId>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/{{ item.branch_develop | default('master') }}</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions>
+      <hudson.plugins.git.extensions.impl.CleanBeforeCheckout/>
+      <hudson.plugins.git.extensions.impl.RelativeTargetDirectory>
+        <relativeTargetDir>{{ item.name if item.name is defined else (item.url | basename) }}</relativeTargetDir>
+      </hudson.plugins.git.extensions.impl.RelativeTargetDirectory>
+      <hudson.plugins.git.extensions.impl.CloneOption>
+        <shallow>true</shallow>
+        <noTags>false</noTags>
+        <reference></reference>
+        <depth>1</depth>
+        <honorRefspec>false</honorRefspec>
+      </hudson.plugins.git.extensions.impl.CloneOption>
+    </extensions>
+  </scm>
+  {% else %}
+  <scm/>
+  {% endif %}
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  {% if aci_install_type == 'server' %}
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/2 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+  {% else %}
+  <triggers/>
+  {% endif %}
+  <concurrentBuild>false</concurrentBuild>
+  <customWorkspace>${JENKINS_HOME}/workspace/develop/{{ item.group }}</customWorkspace>
+  <builders>
+    <javaposse.jobdsl.plugin.ExecuteDslScripts plugin="job-dsl@1.42">
+      <scriptText>// process Roles
+
+def rolesDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.group }}/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}&apos;)
+
+createRoleCheck(rolesDir)
+rolesDir.eachFile() { file -&gt; createRoleCheck(file) }
+
+void createRoleCheck(File roleDir){
+  def aciDir = new java.io.File(roleDir.getAbsolutePath() + &apos;/examples&apos;)
+
+  if(aciDir.exists()){
+    job(&apos;TR_{{ item.group }}_&apos; + roleDir.getName()){
+
+      {% if aci_install_type == 'server' %}
+      scm {
+        git {
+            remote {
+                url(&apos;{{ item.url }}&apos;)
+                {% if item.id_rsa is defined or item.password is defined %}credentials(&apos;{{ item.group + (item.name | default('')) }}&apos;){% endif %}
+            }
+            branch(&apos;*/{{ item.branch_develop | default('master') }}&apos;)
+            clean()
+        }
+      }
+      {% endif %}
+
+      blockOn([&apos;TR_.*',&apos;TP_.*&apos;])
+
+      configure { project -&gt;
+        project /
+        builders /
+        &apos;hudson.plugins.parameterizedtrigger.TriggerBuilder&apos;(plugin: &quot;parameterized-trigger@2.30&quot;) /
+        configs /
+        &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
+          configs {
+            &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
+              properties(&apos;REPO_LABEL={{ item.group }}\nARTIFACTS_PATH={{ item.subpath_roles if item.subpath_roles is defined else '.' }}\nARTIFACT_NAME=&apos; + roleDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/develop/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
+            }
+          }
+          projects(&apos;03_RUN_TESTS&apos;)
+          condition(&apos;ALWAYS&apos;)
+       	  block {
+            buildStepFailureThreshold {
+              ordinal(2)
+          	  }
+            unstableThreshold {
+              ordinal(1)
+          	  }
+            failureThreshold {
+              ordinal(2)
+          	  }
+       		}
+          }
+   		}
+    }
+  }
+}
+
+// process Playbooks
+
+def playbooksDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.group }}/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}&apos;)
+
+createPlaybookCheck(playbooksDir)
+playbooksDir.eachFile() { file -&gt; createPlaybookCheck(file) }
+
+void createPlaybookCheck(File playbookDir){
+  def playbookFile = new java.io.File(playbookDir.getAbsolutePath() + &apos;/site.yml&apos;)
+  def playbooksDefinitionFile = new java.io.File(playbookDir.getAbsolutePath() + &apos;/aci/playbooks&apos;)
+
+  if(playbookFile.exists() || playbooksDefinitionFile.exists()){
+    job(&apos;TP_{{ item.group }}_&apos; + playbookDir.getName()){
+
+      {% if aci_install_type == 'server' %}
+      scm {
+        git {
+            remote {
+                url(&apos;{{ item.url }}&apos;)
+                {% if item.id_rsa is defined or item.password is defined %}credentials(&apos;{{ item.group + (item.name | default('')) }}&apos;){% endif %}
+            }
+            branch(&apos;*/{{ item.branch_develop | default('master') }}&apos;)
+            clean()
+        }
+      }
+      {% endif %}
+
+      configure { project -&gt;
+        project /
+        builders /
+        &apos;hudson.plugins.parameterizedtrigger.TriggerBuilder&apos;(plugin: &quot;parameterized-trigger@2.30&quot;) /
+        configs /
+        &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
+          configs {
+            &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
+              properties(&apos;REPO_LABEL={{ item.group }}\nARTIFACTS_PATH={{ item.subpath_playbooks if item.subpath_playbooks is defined else '.' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/develop/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
+            }
+          }
+          projects(&apos;03_RUN_TESTS&apos;)
+          condition(&apos;ALWAYS&apos;)
+       	  block {
+            buildStepFailureThreshold {
+              ordinal(2)
+          	  }
+            unstableThreshold {
+              ordinal(1)
+          	  }
+            failureThreshold {
+              ordinal(2)
+          	  }
+       		}
+          }
+   		}
+    }
+  }
+}
+
+{% if aci_install_type == 'server' %}
+multiJob(&apos;02_RUN_PIPELINE_{{ item.group }}&apos;) {
+
+    {% if (aci_install_type == 'server') and ((item.branch_staging is defined) or (item.branch_live is defined)) %}
+    customWorkspace(&apos;${JENKINS_HOME}/workspace/develop/{{ item.group }}&apos;)
+    scm {
+      git {
+          remote {
+              url(&apos;{{ item.url }}&apos;)
+              {% if item.id_rsa is defined or item.password is defined %}credentials(&apos;{{ item.group + (item.name | default('')) }}&apos;){% endif %}
+          }
+          branch(&apos;*/{{ item.branch_develop | default('master') }}&apos;)
+          clean()
+      }
+    }
+    {% endif %}
+
+    steps {
+
+        phase(&apos;Role tests&apos;) {
+          rolesDir.eachFile() { file -&gt;
+        	def aciDir = new java.io.File(file.getAbsolutePath() + &apos;/examples&apos;)
+
+            if(aciDir.exists()){
+              phaseJob(&apos;TR_{{ item.group }}_&apos; + file.getName()){
+                configure { node -&gt;
+                  node &lt;&lt; {
+                    buildOnlyIfSCMChanges(true)
+                    currParams(false)
+                    killPhaseOnJobResultCondition(&apos;NEVER&apos;)
+                  }
+                }
+              }
+            }
+          }
+        }
+
+      	phase(&apos;Playbook tests&apos;) {
+          playbooksDir.eachFile() { file -&gt;
+            def playbookFile = new java.io.File(file.getAbsolutePath() + &apos;/site.yml&apos;)
+            def playbooksDefinitionFile = new java.io.File(file.getAbsolutePath() + &apos;/aci/playbooks&apos;)
+
+            if(playbookFile.exists() || playbooksDefinitionFile.exists()){
+              phaseJob(&apos;TP_{{ item.group }}_&apos; + file.getName()){
+                configure { node -&gt;
+                  node &lt;&lt; {
+                    currParams(false)
+                    killPhaseOnJobResultCondition(&apos;NEVER&apos;)
+                  }
+                }
+              }
+            }
+          }
+      	}
+    }
+
+    {% if aci_install_type == 'server' %}
+    publishers {
+      {% if item.branch_staging is defined %}
+      git {
+        pushOnlyIfSuccess()
+        branch(&apos;origin&apos;, &apos;{{ item.branch_staging }}&apos;)
+      }
+      {% endif %}
+      {% if item.branch_live is defined %}
+      git {
+        pushOnlyIfSuccess()
+        branch(&apos;origin&apos;, &apos;{{ item.branch_live }}&apos;)
+      }
+      {% endif %}
+      mailer('', false, true)
+    }
+    {% endif %}
+}
+
+{% if aci_autostart_pipeline == true %}
+queue(&apos;02_RUN_PIPELINE_{{ item.group }}&apos;)
+{% endif %}
+{% endif %}</scriptText>
+      <usingScriptText>true</usingScriptText>
+      <ignoreExisting>false</ignoreExisting>
+      <removedJobAction>DELETE</removedJobAction>
+      <removedViewAction>DELETE</removedViewAction>
+      <lookupStrategy>JENKINS_ROOT</lookupStrategy>
+      <additionalClasspath></additionalClasspath>
+    </javaposse.jobdsl.plugin.ExecuteDslScripts>
+  </builders>
+  <publishers/>
+  <buildWrappers/>
+</project>

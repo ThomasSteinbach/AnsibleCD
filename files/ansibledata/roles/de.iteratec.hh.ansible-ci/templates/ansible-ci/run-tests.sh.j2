@@ -1,0 +1,133 @@
+#!/bin/bash
+
+# Following parameters must be passed to this script:
+#
+# $1 - The name of the ACI directory (for roles)
+#
+# Following Variables must be declared in the calling Jenkins Job:
+#
+# $WORKSPACE      - Jenkins WORKSPACE
+# $ARTIFACTS_PATH - The sub path the roules would be found within the Jenkins WORKSPACE
+# $ARTIFACT_NAME  - The name of the Ansible subdirectory (to roles or playbook) to test
+
+# get the working dir of the script
+BASEDIR=$(dirname $0)
+EXAMPLESDIRNAME="${1}"
+ARTIFACTDIR="${WORKSPACE}/${ARTIFACTS_PATH}/${ARTIFACT_NAME}"
+
+cd $"${ARTIFACTDIR}"
+
+# determine if to check Role or Playbook
+if [[ -f site.yml || -f aci/playbooks ]] && [[ ! -d "${EXAMPLESDIRNAME}" ]]; then
+  CHECK_PLAYBOOK=true;
+  EXAMPLESDIR="."
+elif [[ ! -f site.yml && -d "${EXAMPLESDIRNAME}" ]]; then
+  CHECK_ROLE=true
+  EXAMPLESDIR="${ARTIFACTDIR}/${EXAMPLESDIRNAME}"
+else
+  echo "Target test folder cannot be Playbook and Role together."
+  exit 1
+fi
+
+
+echo ""
+echo "=============================================================================================="
+echo "= Run AnsibleCI Test Suite                                                                   ="
+echo "=============================================================================================="
+echo -e "\n\n"
+echo " Linting Ansible Code"
+echo "==============================="
+echo ""
+result_linting='PASSED'
+for f in $(find . -name "*.yml"); do
+    # skip lint excludes
+    if [[ -f "${EXAMPLESDIR}/aci/lint-excludes" ]]; then
+      while read exclude; do
+        if [[ "${f##*/}" == "$exclude" ]]; then
+          continue 2
+        fi
+      done < "${EXAMPLESDIR}/aci/lint-excludes"
+    fi
+
+    ansible-lint{{ (' -x ' + aci_lint_skip_list|join(',')) if aci_lint_skip_list is defined and (aci_lint_skip_list|length) > 0 else '' }} "$f" 2> linterror; rc=$?
+    if [[ $rc != 0 ]]; then
+      grep -q "Decryption failed" linterror
+      rc2=$?
+      if [[ $rc2 == 0 ]]; then
+        echo "-> [SKIPPED] $f - vault files could not be linted"
+        result_linting='SKIPPED'
+      else
+        echo "-> [FAIL] $f"
+        result_linting='FAILED'
+      fi
+    else
+        echo "-> [SUCCESS] $f"
+    fi
+done
+rm linterror
+
+PLAYBOOK_RESULTS=()
+result_playbook_checks='PASSED'
+if [[ $result_linting == 'FAILED' ]]; then
+  echo -e "\n\n"
+  echo "==============================="
+  echo "= Skip Playbook executions    ="
+  echo "==============================="
+  result_playbook_checks='SKIPPED'
+elif [[ ! $(ls) ]]; then
+  echo -e "\n\n"
+  echo "========================================================================="
+  echo "= [ERROR] ${playbook} - No Playbook directorys found inside examples    ="
+  echo "========================================================================="
+  result_playbook_checks='FAILED'
+else
+  if [[ $CHECK_PLAYBOOK = true ]]; then
+    PLAYBOOK_FOLDERS="."
+  elif [[ $CHECK_ROLE = true ]]; then
+    PLAYBOOK_FOLDERS=$(ls "${EXAMPLESDIR}")
+  fi
+
+  for playbook in ${PLAYBOOK_FOLDERS}; do
+
+    if [[ "$playbook" == 'aci' ]]; then continue; fi
+
+    # check if there is a 'playbooks' configuration, mentioning other
+    # playbook files than just 'site.yml'
+    if [[ -f "${EXAMPLESDIR}/${playbook}/aci/playbooks" ]]; then
+      playbooknames=($(cat "${EXAMPLESDIR}/${playbook}/aci/playbooks"))
+    else
+      playbooknames=('site.yml')
+    fi
+
+    for name in "${playbooknames[@]}"; do
+      source "${BASEDIR}/check-playbook.sh" "${EXAMPLESDIR}/${playbook}" "$name"
+
+      # evaluate result
+      grep -q 'FAILED' <<< "${CHECK_PLAYBOOK_RESULT}"; rc=$?
+      if [[ $rc == 0 ]]; then
+          echo "-> [FAIL] ${playbook}"
+          result_playbook_checks='FAILED'
+      else
+          echo "-> [SUCCESS] ${playbook}"
+      fi
+      PLAYBOOK_RESULTS+=("${CHECK_PLAYBOOK_RESULT}")
+    done
+  done
+fi
+
+echo -e "\n\n"
+echo "==============================="
+echo "= Evaluation Summary          ="
+echo "==============================="
+echo ""
+echo "Linting: $result_linting"
+echo "Playbook Checks: $result_playbook_checks"
+for result in "${PLAYBOOK_RESULTS[@]}"; do
+  echo -e "$result"
+done
+echo ""
+echo "=============================================================================================="
+echo ""
+if [[ $result_linting == 'FAILED' || $result_playbook_checks == 'FAILED' ]]; then
+    exit 1
+fi

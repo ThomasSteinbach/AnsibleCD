@@ -1,0 +1,13 @@
+---
+# the user used for running the Vagrant VMs
+aci_prelive_user: ansibleci
+
+aci_prelive_machines:
+  - name: teamred
+    vagrant_box: ubuntu/trusty64
+    ssh_port: 2224
+    memory: 4096
+  - name: teamblue
+    vagrant_box: debian/jessie64
+    ssh_port: 2225
+    memory: 768

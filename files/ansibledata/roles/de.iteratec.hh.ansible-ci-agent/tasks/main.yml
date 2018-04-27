@@ -1,0 +1,89 @@
+---
+
+- name: create squid home path
+  file:
+    path: "{{ SQUID_HOME }}"
+    state: directory
+
+- name: copy squid-deb-proxy configuration
+  copy:
+    src: squid-deb-proxy.conf
+    dest: "{{ SQUID_HOME }}/squid-deb-proxy.conf"
+
+- name: create squid-deb-proxy DVC
+  become: yes
+  docker:
+    name: squid-deb-proxy-data
+    image: pmoust/squid-deb-proxy
+    volumes:
+      - "{{ SQUID_HOME }}/squid-deb-proxy.conf:/etc/squid-deb-proxy/squid-deb-proxy.conf"
+    state: present
+
+- name: create squid-deb-proxy container
+  become: yes
+  docker:
+    name: squid-deb-proxy
+    image: pmoust/squid-deb-proxy
+    ports:
+      - "{{ acia_squid_port }}:8000"
+    volumes_from:
+      - squid-deb-proxy-data
+    state: started
+    restart_policy: "{{ 'always' if aci_install_type == 'server' else 'no' }}"
+
+- name: add authorized_key for ansible-ci server on vagrant host
+  authorized_key:
+    user: "{{ acia_login_user }}"
+    key: "{{ ACI_PUBLIC_KEY }}"
+
+- name: install vagrant proxy plugin
+  become: yes
+  command: vagrant plugin install vagrant-proxyconf
+  when: acia_proxy_url is defined
+
+- name: create working directory
+  file:
+    path: "{{ WORKING_DIRECTORY }}"
+    state: directory
+
+- name: get contents of remote ca.pem
+  slurp:
+    src: "{{ DMIRROR_HOME }}/ca.pem"
+  register: caPemRetVal
+
+- name: copy vagrant files
+  template:
+    src: "{{ item }}.j2"
+    dest: "{{ WORKING_DIRECTORY }}/{{ item }}"
+  with_items:
+    - Vagrantfile
+    - bootstrap-vagrant.sh
+  when: acia_target_provider == 'vagrant'
+
+- name: copy aws files
+  template:
+    src: bootstrap-aws.sh.j2
+    dest: "{{ WORKING_DIRECTORY }}/bootstrap-aws.sh"
+  when: acia_target_provider == 'aws'
+
+- name: create dedicated SSH private key for VM
+  copy:
+    content: "{{ ACIA_PRIVATE_KEY }}"
+    dest: "{{ WORKING_DIRECTORY }}/id_rsa"
+    mode: 0600
+
+- name: copy ACI private key as known hosts file to agent for later mount into docker target
+  copy:
+    content: "{{ ACI_PUBLIC_KEY }}"
+    dest: "{{ WORKING_DIRECTORY }}/acia_target_known_hosts"
+    owner: "{{ acia_target_user }}"
+    group: "{{ acia_target_user }}"
+    mode: 0600
+  when: acia_target_provider == 'docker'
+
+- name: copy ansible-ci-target script
+  become: yes
+  template:
+    src: "ansible-ci-{{ acia_target_provider }}.j2"
+    dest: /usr/local/bin/ansible-ci-target
+    mode: 0755

@@ -1,0 +1,6 @@
+WORKING_DIRECTORY: "{{ ansible_env.HOME }}/.ansible-data/de.iteratec.hh.ansible-ci-agent/vagrant"
+DMIRROR_HOME: "{{ ansible_user_dir }}/.ansible-data/thomass.docker-mirror"
+SQUID_HOME: "{{ ansible_user_dir }}/.ansible-data/thomass.squid-deb-proxy"
+# the network part of the vagrant ip
+VM_IP_NETWORKPART: "{{ (acia_vagrant_ip | default('')) | regex_replace('^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\.\\d{1,3}$', '\\1') }}"
+ACIA_INTERNAL_IP: "{{ (VM_IP_NETWORKPART + '.1') if acia_target_provider == 'vagrant' else acia_host }}"

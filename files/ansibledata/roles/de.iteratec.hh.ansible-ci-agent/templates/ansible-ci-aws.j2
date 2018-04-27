@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [[ -z $1 ]]
+  then exit
+fi
+
+function get_ip(){
+  aws ec2 describe-instances --region eu-central-1 --filters 'Name=tag:Name,Values=ansible-ci-instance' 'Name=instance-state-name,Values=pending,running' --query 'Reservations[*].Instances[*].PrivateIpAddress' --output text
+}
+
+function get_id(){
+  aws ec2 describe-instances --region eu-central-1 --filters 'Name=tag:Name,Values=ansible-ci-instance' 'Name=instance-state-name,Values=pending,running' --query 'Reservations[*].Instances[*].InstanceId' --output text
+}
+
+case "$1" in
+  up) aws ec2 run-instances --image-id {{ acia_aws_image_id }} --count 1 --instance-type {{ acia_aws_instance_type }} --key-name {{ acia_aws_key_name }} --security-group-ids {{ acia_aws_security_group_id }} --subnet-id {{ acia_aws_subnet_id }} --user-data file://{{ WORKING_DIRECTORY }}/bootstrap-aws.sh --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=ansible-ci-instance},{{ acia_aws_tags }}]' 'ResourceType=volume,Tags=[{Key=Name,Value=ansible-ci-instance},{{ acia_aws_tags }}]'
+      aws ec2 wait instance-running --instance-ids $(get_id) ;;
+  destroy) aws ec2 terminate-instances --instance-ids $(get_id) ;;
+  get-ip) get_ip ;;
+  *) echo 'Call with vagrant option [up|destroy|get-ip]' ;;
+esac

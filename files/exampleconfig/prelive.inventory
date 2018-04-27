@@ -1,0 +1,5 @@
+# by default the Pre-Live virtual machines are deployed on the Docker host
+dockerhost ansible_ssh_host=172.17.0.1
+
+[prelive]
+dockerhost

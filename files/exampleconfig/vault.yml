@@ -1,0 +1,33 @@
+ACI_ADMIN_PASSWORD: notthatlush
+
+PKI_PASSWORD: moresafetyplease
+
+ACIA_SUDO_PASSWORD: couldbeemptystring
+
+SMTP_PASSWORD_HASH: Aditk2Baczgcfz1EHFo9MBanskHcvw=
+
+PASSWORDS:
+  - repository: ProjectX
+    playbooks:
+      - name: com.company.serverblue
+        vault: mustbestronger
+        become: changeme
+      - name: com.company.servergreen
+        vault: badidea
+        become: rlybadpassword
+  - repository: myPlaybooks
+    playbooks:
+      - name: my.jenkins
+        vault: notthatsecure
+
+ACI_PRIVATE_KEY: |
+  -----BEGIN RSA PRIVATE KEY-----
+  MIIEowIBAAKCAQEAwo/AoL9s9VaBGXSCpGuVqnZiMwQ8c90CHOceJLe/k/JN6YfL
+  kQDF1lf4NYMtaEOYKSCfaKLzrvt4kd18Naj/GzqnR1IM37oC4IdmI7obkqrNWp9n
+  ymsdKxu8f1P35/nhs0LeHwDBjNF8AYKtswxkLo1ftj7k76CbhfsGQMzjagBZVlAn
+  ...
+  FynjlHo2PkWQEilV3hncog3TPcYWEjM0hA6SZAvGUioAxtpLnfW3v8aHLXAL93Pv
+  NoQnczu837iAA2A+Y6d2WoYcCejsz5bLtdUQNyqkqms0oeYnVUuc
+  -----END RSA PRIVATE KEY-----
+
+ACI_PUBLIC_KEY: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCj8Cgv2z1VoEZd...

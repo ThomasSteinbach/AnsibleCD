@@ -1,0 +1,7 @@
+---
+- name: setup AnsibleCI server
+  hosts: prelive
+  vars_files:
+    - /used_config/prelive.yml
+  roles:
+    - de.iteratec.hh.ansible-ci-prelive

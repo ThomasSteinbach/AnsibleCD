@@ -1,0 +1,17 @@
+#!/bin/bash
+echo '{{ ACI_PUBLIC_KEY }}' >> /home/ec2-user/.ssh/authorized_keys
+
+# setup apt proxy cache connection
+echo "proxy \"http://{{ ACIA_INTERNAL_IP }}:{{ acia_squid_port }}\";" >> /etc/yum.conf
+
+# setup CA certificate from docker proxy cache
+echo '{{ caPemRetVal['content'] | b64decode }}' > /usr/local/share/ca-certificates
+update-ca-trust
+echo "DOCKER_OPTS=\"--registry-mirror=https://{{ ACIA_INTERNAL_IP }}:{{ acia_dmirror_port }}\"" > /etc/default/docker
+
+# temporary workaround for https://github.com/ansible/ansible-modules-core/issues/2488
+groupadd docker
+usermod -G docker ec2-user
+
+# update cache to avoid problems with unauthenticated packages
+yum update

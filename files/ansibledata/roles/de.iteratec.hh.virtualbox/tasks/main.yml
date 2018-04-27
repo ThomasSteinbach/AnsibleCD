@@ -1,0 +1,2 @@
+- name: install vagrant depending on ansible_os_family (darwin=MacOSX,debian=Debian/Ubuntu)
+  include: "{{ ansible_os_family | lower }}.yml"

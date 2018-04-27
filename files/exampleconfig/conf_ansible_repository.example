@@ -1,0 +1,3 @@
+Create a file called 'custom_ansible_repository' with just the URL of the custom
+Ansible repository you want to use when defining custom Ansible versions and
+branches for your playbooks.

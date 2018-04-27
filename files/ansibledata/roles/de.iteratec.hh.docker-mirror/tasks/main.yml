@@ -1,0 +1,26 @@
+---
+
+# Issue https://github.com/docker/docker/issues/17468
+# Restricted access does not work with mirror
+# - name: create users
+#   shell: "docker run --rm -v '{{ dmirror_home }}':/auth --entrypoint htpasswd registry:2 -Bbc /auth/htpasswd {{ dmirror_user.name }} {{ dmirror_user.password }}"
+#   creates: "{{ dmirror_home }}/htpasswd"
+
+- name: copy registry configuration
+  template:
+    src: config.yml.j2
+    dest: "{{ dmirror_home }}/config.yml"
+
+- name: run docker registry
+  become: yes
+  docker:
+    name: docker-mirror
+    image: registry:2
+    pull: always
+    command: serve /secret/config.yml
+    ports:
+      - "{{ dmirror_port }}:5000"
+    volumes:
+      - "{{ dmirror_home }}:/secret"
+    state: started
+    restart_policy: "{{ dmirror_restart_policy }}"

@@ -1,0 +1,3 @@
+# After how many seconds an order to update the apt cache
+# really becomes executed
+apt_cache_valid_time: 86400

@@ -1,0 +1,55 @@
+---
+
+- name: install docker
+  become: yes
+  apt:
+    name: docker.io
+    state: present
+    update_cache: yes
+
+- name: set docker proxy
+  become: yes
+  lineinfile:
+    path: /lib/systemd/system/docker.service
+    insertafter: '^\[Service\]'
+    regexp: "^Environment=\"{{ item }}="
+    line: "Environment=\"{{ item }}={{ acia_proxy_url }}\""
+  with_items:
+    - HTTP_PROXY
+    - HTTPS_PROXY
+  when: acia_proxy_url is defined
+  register: proxysettings
+
+- name: restart docker
+  become: yes
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+  when: proxysettings | changed
+
+- name: ensure docker service is running
+  become: yes
+  service:
+    name: docker
+    state: running
+    enabled: yes
+
+- name: install python-pip to install python libraries
+  become: yes
+  apt:
+    name: "python-pip"
+    state: present
+    force: yes
+
+- name: update python-pip
+  become: yes
+  pip:
+    name: pip
+    state: latest
+
+- name: install python docker library
+  become: yes
+  pip:
+    name: docker-py
+    state: latest

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [[ -z $1 ]]
+  then exit
+fi
+
+case "$1" in
+  up) docker run -d --name -v "{{ WORKING_DIRECTORY }}/acia_target_known_hosts":"{{ acia_target_home }}/.ssh/known_hosts" acia.vm {{ acia_docker_image }} ;;
+  destroy) docker rm -vf acia.vm ;;
+  get-ip) docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' acia.vm ;;
+  *) echo 'Call with vagrant option [up|destroy|get-ip]' ;;
+esac

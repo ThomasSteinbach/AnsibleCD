@@ -1,0 +1,192 @@
+---
+
+- name: set proxy environment variables
+  become: yes
+  lineinfile:
+    dest: /var/jenkins_home/proxyenv
+    create: yes
+    regexp: "export {{ item }}"
+    line: "export {{ item }}={{ aci_proxy_url }}"
+  with_items:
+    - http_proxy
+    - https_proxy
+  when: aci_proxy_url is defined
+
+- name: create nescessary directories in /var/jenkins_home
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - /var/jenkins_home/users/admin
+    - /var/jenkins_home/jobs/00_SETUP_AGENTS
+    - /var/jenkins_home/jobs/03_RUN_TESTS
+    - /var/jenkins_home/jobs/REMOVE_TARGET
+    - /var/jenkins_home/ansible-ci/serverspec/spec
+
+- name: create nescessary directories in /var/jenkins_home on server
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - /var/jenkins_home/jobs/00_SETUP_PRELIVE
+    - /var/jenkins_home/jobs/12_DEPLOY_STAGING
+    - /var/jenkins_home/jobs/22_DEPLOY_LIVE
+  when: aci_install_type == 'server'
+
+- name: create directories for private keys
+  file:
+    path: "/var/jenkins_home/.ssh/{{ item.group + (item.name | default('')) }}"
+    state: directory
+    mode: 0700
+  with_items: "{{ aci_repository }}"
+
+- name: jenkins private key for vagrant
+  copy:
+    content: "{{ ACI_PRIVATE_KEY }}"
+    dest: /var/jenkins_home/.ssh/id_rsa
+    mode: 0600
+  when: ACI_PRIVATE_KEY is defined
+
+- name: copy jenkins private key for repositories
+  copy:
+    content: "{{ item.id_rsa }}"
+    dest: "/var/jenkins_home/.ssh/{{ item.group + (item.name | default('')) }}/id_rsa"
+    mode: 0600
+  with_items: aci_repository
+  when: aci_install_type == 'server' and item.id_rsa is defined
+
+- name: copy jenkins system configuration
+  template:
+    src: "jenkins_home/{{ item }}.j2"
+    dest: "/var/jenkins_home/{{ item }}"
+  with_items:
+    - .gitconfig
+    - config.xml
+    - credentials.xml
+    - hudson.plugins.git.GitSCM.xml
+    - hudson.tasks.Mailer.xml
+    - jenkins.model.JenkinsLocationConfiguration.xml
+
+- name: copy jenkins admin user configuration
+  template:
+    src: jenkins_home/users/admin/config.xml.j2
+    dest: /var/jenkins_home/users/admin/config.xml
+
+- name: create paths for playbooks vault passwords
+  file:
+    path: "/var/jenkins_home/passwords/{{ item.repository }}"
+    state: directory
+    mode: 0700
+  with_items: "{{ PASSWORDS }}"
+
+- name: create vault-password-files
+  copy:
+    content: "{{ item[1].vault }}"
+    dest: "/var/jenkins_home/passwords/{{ item[0].repository }}/{{ item[1].name }}.vaultpass"
+    mode: 0600
+  with_subelements:
+    - "{{ PASSWORDS }}"
+    - playbooks
+  when: item[1].vault is defined
+
+- name: create become-password-files
+  copy:
+    content: "{{ item[1].become }}"
+    dest: "/var/jenkins_home/passwords/{{ item[0].repository }}/{{ item[1].name }}.becomepass"
+    mode: 0600
+  with_subelements:
+    - "{{ PASSWORDS }}"
+    - playbooks
+  when: aci_install_type == 'server' and item[1].become is defined
+
+- name: create job paths
+  file:
+    path: "/var/jenkins_home/jobs/01_DEVELOP_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}"
+    state: directory
+  with_items:
+    - "{{ aci_repository }}"
+
+- name: create job paths on server
+  file:
+    path: "/var/jenkins_home/jobs/{{ item[0] }}_{{ item[1].group }}_{{ item[1].name if item[1].name is defined else (item[1].url | basename) }}"
+    state: directory
+  with_nested:
+    - ['11_STAGING', '21_LIVE']
+    - "{{ aci_repository }}"
+  when: aci_install_type == 'server'
+
+- name: copy 01_DEVELOP tasks
+  template:
+    src: "jenkins_home/jobs/01_DEVELOP/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/01_DEVELOP_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}/config.xml"
+  with_items: "{{ aci_repository }}"
+
+- name: copy 11_STAGING tasks
+  template:
+    src: "jenkins_home/jobs/11_STAGING/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/11_STAGING_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}/config.xml"
+  with_items: "{{ aci_repository }}"
+  when: aci_install_type == 'server' and item.branch_staging is defined
+
+- name: copy 21_LIVE tasks
+  template:
+    src: "jenkins_home/jobs/21_LIVE/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/21_LIVE_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}/config.xml"
+  with_items: "{{ aci_repository }}"
+  when: aci_install_type == 'server' and item.branch_live is defined
+
+- name: copy further jenkins tasks
+  template:
+    src: "jenkins_home/jobs/{{ item }}/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/{{ item }}/config.xml"
+  with_items:
+    - 00_SETUP_AGENTS
+    - 03_RUN_TESTS
+    - REMOVE_TARGET
+
+- name: copy further jenkins tasks
+  template:
+    src: "jenkins_home/jobs/{{ item }}/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/{{ item }}/config.xml"
+  with_items:
+    - 00_SETUP_PRELIVE
+    - 12_DEPLOY_STAGING
+    - 22_DEPLOY_LIVE
+  when: aci_install_type == 'server' 
+
+- name: create global roles playbook
+  template:
+    src: "ansible-ci/global-roles.yml.j2"
+    dest: /var/jenkins_home/ansible-ci/global-roles.yml
+  when: acia_global_roles is defined
+
+- name: create global roles whitelist
+  copy:
+    content: "{{ acia_global_roles_whitelist | to_yaml }}"
+    dest: /var/jenkins_home/ansible-ci/global-roles-whitelist
+  when: acia_global_roles_whitelist is defined
+
+- name: create global roles blacklist
+  copy:
+    content: "{{ acia_global_roles_blacklist | to_yaml }}"
+    dest: /var/jenkins_home/ansible-ci/global-roles-blacklist
+  when: acia_global_roles_blacklist is defined
+
+- name: copy ansible-ci specific templates
+  template:
+    src: "ansible-ci/{{ item }}.j2"
+    dest: "/var/jenkins_home/ansible-ci/{{ item }}"
+  with_items:
+    - run-tests.sh
+    - check-playbook.sh
+    - deploy.sh
+    - serverspec/spec/spec_helper.rb
+
+- name: make test scripts executable
+  file:
+    path: "/var/jenkins_home/ansible-ci/{{ item }}"
+    mode: 0755
+  with_items:
+    - run-tests.sh
+    - check-playbook.sh
+    - deploy.sh

@@ -1,0 +1,3 @@
+---
+# vault variable defaults must be at least an empty array
+PASSWORDS: []

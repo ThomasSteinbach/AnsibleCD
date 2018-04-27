@@ -1,0 +1,5 @@
+# by default the Agent is deployed on the Docker host
+dockerhost ansible_ssh_host=172.17.0.1
+
+[agents]
+dockerhost

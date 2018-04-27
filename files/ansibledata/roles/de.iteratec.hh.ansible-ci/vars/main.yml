@@ -1,0 +1,8 @@
+---
+ACI_SERVER_URL: "{{ aci_server_protocol }}://{{ aci_server_domain }}:{{ aci_server_port }}"
+
+interim_workspaces: "{% for item in aci_repository %}{{ item.url }}:/var/jenkins_home/workspace/develop/{{ item.group }} {% endfor %}"
+MOUNTED_WORKSPACES: "{{ interim_workspaces.split() if aci_install_type == 'development' else [] }}"
+
+# this is a variable used by the Ansible engine itself, thus do not rename!!!
+docker_command: remotedocker

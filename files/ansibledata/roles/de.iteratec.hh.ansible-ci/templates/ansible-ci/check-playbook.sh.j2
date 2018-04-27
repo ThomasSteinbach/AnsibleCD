@@ -1,0 +1,454 @@
+#!/bin/bash
+
+# Following parameters must be passed to this script:
+#
+# $1 - The Path to an ACI Playbook directory
+# $2 - The name of the playbook file to be tested
+#
+# Following Variables must be declared in the calling Jenkins Job:
+#
+# $JENKINS_HOME     - The Jenkins home directory
+# $WORKSPACE        - The root of the git repository
+# $REPO_LABEL       - The label of the git repository used in ACI.
+# $ARTIFACT_NAME    - The name of the Ansible subdirectory (to roles or playbook) to test
+# $ROLES_PATH       - The value of the ansible_roles variable used in the ansible.cfg
+# $LOG_STDOUTERR    - This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console.
+# $ANSIBLE_VERBOSE  - This variable can be set by the user to make Ansible output more verbose (-vvv).
+
+# get the working dir of the script
+BASEDIR=$(dirname "$0")
+# translate the parameter into a comprehensible variable
+PLAYBOOKDIR="${1}"
+PLAYBOOKFILE="${2}"
+
+# complete identifier of playbook name
+PLAYBOOK_FQN="${ARTIFACT_NAME}/$(basename $PLAYBOOKDIR)/${PLAYBOOKFILE}"
+
+VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.vaultpass"
+TESTPLAN_FILE="${PLAYBOOKDIR}/aci/testplan"
+
+CHECK_PLAYBOOK_RESULT="Playbook ${PLAYBOOK_FQN}: \t"
+
+if [[ $ANSIBLE_VERBOSE = 'true' ]]; then
+  ansible_verbosity='-vvv'
+fi
+
+# BEGIN DECLARE FUNCTIONS
+
+function execute_hook(){
+  hook_file=$1
+  hook_filepath="aci/hooks/${hook_file}.sh"
+
+  STEP_RESULT='PASSED'
+
+  # user header
+  echo -e '\n\n'
+  echo " Run Hook ${hook_file}"
+  echo "==============================="
+  echo ""
+
+  if [[ $PLAYBOOK_FAILED = 'true' ]]; then
+    echo -e "\n-> Hook execution ${hook_file} SKIPPED due to previous errors"
+    STEP_RESULT='SKIPPED'
+    return
+  fi
+
+  # run hook
+  if [[ -f "${hook_filepath}" ]]; then
+
+    # make sure hook exits on error
+    hook_modified=false
+    grep -q 'set -e' "${hook_filepath}"; rc=$?
+    if [[ $rc != 0 ]]; then
+      sed -i "2s/^/set -e\n/" "${hook_filepath}"
+      hook_modified=true
+    fi
+
+    chmod +x "${hook_filepath}"
+    scp -P '{{ acia_target_port }}' "${hook_filepath}" "{{ acia_target_user }}@acia.vm:/tmp/${hook_file}.sh"
+    ssh -n -p '{{ acia_target_port }}' '{{ acia_target_user }}@acia.vm' "/tmp/${hook_file}.sh"; rc=$?
+
+    if [[ $rc != 0 ]]; then
+      echo -e "\n-> Hook execution ${hook_file} FAILED"
+      STEP_RESULT='FAILED'
+      PLAYBOOK_FAILED=true
+    fi
+
+    if [[ $hook_modified = 'true' ]]; then
+      sed -i '2d' "${hook_filepath}"
+    fi
+  else
+    echo -e "\n-> Hook execution ${hook_file} SKIPPED - no hook file found"
+    STEP_RESULT='SKIPPED'
+  fi
+
+  if [[ $STEP_RESULT == 'PASSED' ]]; then
+    echo -e "\n-> Hook execution ${hook_file} PASSED"
+  fi
+}
+
+function switch_ansible_branch(){
+  echo "Use Branch $repo_branch"
+  repo_branch="$1"
+  prev_dir=$(pwd)
+  cd /ansible_custom
+  git fetch
+  git checkout "$repo_branch" 1>/dev/null
+  git submodule update --init --recursive 1>/dev/null
+  source ./hacking/env-setup -q
+  cd "$prev_dir"
+}
+
+function switch_ansible_version(){
+  echo "Use Version $repo_version"
+  repo_version="$1"
+  prev_dir=$(pwd)
+  cd /ansible_custom
+  git reset --hard "$repo_version"
+  git submodule update --init --recursive
+  source ./hacking/env-setup -q
+  cd "$prev_dir"
+}
+
+function executeGlobalRole() {
+  # execute global roles in general
+  EXECUTE_GLOBAL_ROLE=true
+
+  # but do not execute global role when whitelist exists but does not contain artifact
+  if [[ -f "${JENKINS_HOME}/ansible-ci/global-roles-whitelist" && $(grep -c "[[ ]${ARTIFACT_NAME}[],]" "${JENKINS_HOME}/ansible-ci/global-roles-whitelist") -eq 0 ]]; then
+    EXECUTE_GLOBAL_ROLE=false
+  fi
+
+  # also do not execute global role when blacklist exists and contains this artifact (with precedence over whitelist)
+  if [[ -f "${JENKINS_HOME}/ansible-ci/global-roles-blacklist" && $(grep -c "[[ ]${ARTIFACT_NAME}[],]" "${JENKINS_HOME}/ansible-ci/global-roles-blacklist") -ne 0 ]]; then
+    EXECUTE_GLOBAL_ROLE=false
+  fi
+
+  if [[ "$EXECUTE_GLOBAL_ROLE" = 'true' && -f "${JENKINS_HOME}/ansible-ci/global-roles.yml" && $(grep -c "role: ${ARTIFACT_NAME}" "${JENKINS_HOME}/ansible-ci/global-roles.yml") -eq 0 ]]; then
+
+    echo -e '\n'
+    echo " Run global playbook"
+    echo "---------------------"
+    echo ""
+
+    cp "${JENKINS_HOME}/ansible-ci/global-roles.yml" .
+    if [[ -f ${VAULT_PASSWORD_FILE} ]]; then
+      eval "ansible-playbook $custom_ansible_options --vault-password-file \"${VAULT_PASSWORD_FILE}\" global-roles.yml" #&> /dev/null
+    else
+      eval "ansible-playbook $custom_ansible_options global-roles.yml" #&> /dev/null
+    fi
+    rm global-roles.yml
+    echo -e '\n'
+  else
+    echo -e '\n'
+    echo " Skip global playbook as role is part of it ..."
+    echo ""
+  fi
+}
+
+function execute_ansible(){
+  run_name=$1
+  custom_check_statement=$2
+  custom_ansible_options=${3:-""}
+
+  STEP_RESULT='PASSED'
+
+  # user header
+  echo -e '\n\n'
+  echo " Test Ansible ${run_name}"
+  echo "==============================="
+  echo ""
+
+  if [[ $PLAYBOOK_FAILED = 'true' ]]; then
+    echo -e "\n-> Ansible ${run_name} SKIPPED due to previous errors"
+    STEP_RESULT='SKIPPED'
+    return
+  fi
+
+  if [[ $custom_check_statement == '' ]]; then
+    unset custom_check_statement
+  elif [[ $custom_check_statement == 'IDEMPOTENCY' ]]; then
+    custom_check_statement='changed=0\s*unreachable=0\s*failed=0'
+  fi
+
+  # set ansible branch
+  if [[ -f aci/ansible_branch ]]; then
+    switch_ansible_branch "$(cat aci/ansible_branch)"
+  elif [[ -f "${WORKSPACE}/aci/ansible_branch" ]]; then
+    switch_ansible_branch "$(cat ${WORKSPACE}/aci/ansible_branch)"
+  fi
+
+  # set ansible version
+  if [[ -f aci/ansible_version ]]; then
+    switch_ansible_version "$(cat aci/ansible_version)"
+  elif [[ -f "${WORKSPACE}/aci/ansible_version" ]]; then
+    switch_ansible_version "$(cat ${WORKSPACE}/aci/ansible_version)"
+  fi
+
+  # run playbook
+  ansible --version | head -n 1
+  echo ''
+  # here I used 'dirty' eval because $custom_ansible_options can contain strings like --extra-vars "var1=one var2=one" which will be substituted to --extra-vars '"var1=one var2=one"'
+  if [[ -f ${VAULT_PASSWORD_FILE} ]]; then
+    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook $custom_ansible_options $ansible_verbosity --vault-password-file \"${VAULT_PASSWORD_FILE}\" aci-playbook.yml | tee ansibleciout.txt"
+  else
+    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook $custom_ansible_options $ansible_verbosity aci-playbook.yml | tee ansibleciout.txt"
+  fi
+
+  # evaluate results
+  grep -q 'unreachable=0\s*failed=0' ansibleciout.txt; rc=$?
+  if [[ $rc != 0 ]]; then
+    echo -e "\n-> Ansible ${run_name} FAILED"
+    STEP_RESULT='FAILED'
+    PLAYBOOK_FAILED=true
+  elif [[ ${custom_check_statement} ]]; then
+
+    grep -q "${custom_check_statement}" ansibleciout.txt; rc=$?
+    if [[ $rc != 0 ]]; then
+      echo -e "\n-> Ansible ${run_name} FAILED"
+      echo -e "-> expected '${custom_check_statement}' in Ansibles output"
+      STEP_RESULT='FAILED'
+      PLAYBOOK_FAILED=true
+    fi
+  fi
+
+  if [[ $STEP_RESULT == 'PASSED' ]]; then
+    echo -e "\n-> Ansible ${run_name} PASSED"
+  fi
+
+  rm ansibleciout.txt
+}
+
+function execute_serverspec(){
+
+  STEP_RESULT='PASSED'
+
+  if [[ -d "aci/spec" ]]; then
+
+    specfile=$1
+    if [[ ! $specfile ]]; then
+      specfile='*'
+    fi
+
+    # user header
+    echo -e '\n\n'
+    echo " Run Serverspec ${specfile}"
+    echo "==============================="
+    echo ""
+
+    if [[ $PLAYBOOK_FAILED = 'true' ]]; then
+      echo -e "\n-> Serverspec ${specfile} SKIPPED due to previous errors"
+      STEP_RESULT='SKIPPED'
+      return
+    fi
+
+    # run serverspec
+    oldpath=$(pwd)
+    cd aci
+    rake "spec[$specfile]"; rc=$?
+    cd "$oldpath"
+
+    # evaluate results
+    if [[ $rc != 0 ]]; then
+        echo -e "\n-> Serverspec ${specfile} FAILED"
+        STEP_RESULT='FAILED'
+        PLAYBOOK_FAILED=true
+    fi
+  else
+    echo -e "\n-> Serverspec ${specfile} SKIPPED"
+    echo -e "-> No 'spec' directory found"
+    STEP_RESULT='SKIPPED'
+  fi
+
+  if [[ $STEP_RESULT == 'PASSED' ]]; then
+    echo -e "\n-> Serverspec ${specfile} PASSED"
+  fi
+}
+
+function run_default_testplan(){
+
+  execute_hook before-playbooks
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}Before-Hook: ${STEP_RESULT}; "
+
+  execute_ansible "First Run"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}Ansible First Run: $STEP_RESULT"
+
+  execute_hook between-playbooks
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Between-Hook: $STEP_RESULT"
+
+  execute_ansible 'Repeated Run' 'IDEMPOTENCY' '--diff'
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Ansible Repeated Run: $STEP_RESULT"
+
+  execute_hook after-playbooks
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; After-Hook: $STEP_RESULT"
+
+  execute_serverspec
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Serverspec: $STEP_RESULT"
+}
+
+function run_custom_testplan(){
+  while read line; do
+
+    # ignore comment lines
+    grep -q '^\s*#.*\|^\s*$' <<< $line; rc=$?
+    if [[ $rc == 0 ]]; then
+      continue
+    fi
+
+    command=()
+    eval "command=($line)"
+
+    case "${command[0]}" in
+      ANSIBLE)
+        execute_ansible "${command[1]}" "${command[2]}" "${command[3]}"
+        CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} Ansible ${command[1]}: ${STEP_RESULT};"
+        ;;
+      HOOK)
+        execute_hook "${command[1]}"
+        CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} Hook ${command[1]}: ${STEP_RESULT};"
+        ;;
+      SERVERSPEC)
+        execute_serverspec "${command[1]}"
+        CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} Serverspec ${command[1]}: ${STEP_RESULT};"
+        ;;
+      *) echo "Invalid command: ${command[0]}" ;;
+    esac
+
+  done < "${TESTPLAN_FILE}"
+}
+
+waitForSSH() {
+  for i in {1..24}; do
+    nc -zvw 1 'acia.vm' '{{ acia_target_port }}' && break
+    sleep 5
+  done
+}
+
+# END DECLARE FUNCTIONS
+
+cd "${PLAYBOOKDIR}"
+
+echo -e '\n\n'
+echo "=========================================================================="
+echo "= Execute Playbook ${PLAYBOOK_FQN}"
+echo "=========================================================================="
+
+if [[ ! -f $PLAYBOOKFILE ]]; then
+  echo "No such playbook file $PLAYBOOKFILE"
+  exit 1
+fi
+
+# PREPARATION START
+
+# reset known_hosts file
+echo -e '\n< Starting test VM... >'
+rm "${JENKINS_HOME}/.ssh/known_hosts"
+ssh -o StrictHostKeyChecking=no -p "{{ acia_ssh_port }}" "{{ acia_login_user }}@{{ acia_host }}" date &> /dev/null
+
+# start remote target and
+ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target up 1> /dev/null
+# register target as acia.vm in /etc/hosts
+TARGET_HOST="$(ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target get-ip)"
+(grep -q 'acia.vm' /etc/hosts && sed "s/.*acia.vm.*/${TARGET_HOST} acia.vm/g" /etc/hosts | sudo tee /etc/hosts ) || echo "${TARGET_HOST} acia.vm" | sudo tee --append /etc/hosts
+# wait for SSH on target host available
+waitForSSH
+# add target to known_hosts file
+ssh -o StrictHostKeyChecking=no -p '{{ acia_target_port }}' '{{ acia_target_user }}@acia.vm' date &> /dev/null
+echo '< ...done >'
+
+# set ansible human log
+if [[ $LOG_STDOUTERR = 'true' ]]; then
+  cp "${BASEDIR}/human_log.py" /usr/local/lib/python2.7/dist-packages/ansible/plugins/callback/human_log.py
+fi
+
+# Create ACI Playbook
+python "${BASEDIR}/create-test-playbook.py" "$PLAYBOOKFILE"
+
+# set correct roles_path in ansible.cfg
+if [[ -f ansible.cfg ]]; then
+  cp ansible.cfg ansible.cfg.bak
+  # replace lines if existent or append to file
+  grep -q '^roles_path' ansible.cfg && sed -i "s@^roles_path.*@roles_path = ${ROLES_PATH}@g" ansible.cfg || echo -e "\nroles_path = ${ROLES_PATH}" >> ansible.cfg
+  grep -q '^inventory' ansible.cfg && sed -i "s/^inventory.*/inventory = inventory/g" ansible.cfg || echo -e "\ninventory = inventory" >> ansible.cfg
+else
+  echo -e "[defaults]\nroles_path = ${ROLES_PATH}\ninventory = inventory" > ansible.cfg
+fi
+
+if [[ -f inventory ]]; then
+  mv inventory inventory.bak
+fi
+echo "acia.vm ansible_ssh_port={{ acia_target_port }} ansible_ssh_user={{ acia_target_user }} ansible_become_pass={{ acia_target_sudo_pass }}" > inventory
+
+# append requirement to head of all serverspec files
+find . -type f -name "*_spec.rb" | while read -r currentfile; do
+  sed -i "1s/^/require 'spec_helper'\n\n/" "${currentfile}"
+done
+
+# add serverspec environment
+if [[ -d aci ]] && [[ -d aci/spec ]]; then
+  cp -a "${BASEDIR}/serverspec/." aci/
+fi
+
+# PREPARATION END
+
+
+# RUN TESTS
+
+STEP_RESULT='PASSED'
+PLAYBOOK_FAILED=false
+
+executeGlobalRole
+
+if [[ -f "${TESTPLAN_FILE}" ]]; then
+  run_custom_testplan
+else
+  run_default_testplan
+fi
+
+# FINAL CLEANUP START
+
+if [[ $LOG_STDOUTERR = 'true' ]]; then
+  rm /usr/local/lib/python2.7/dist-packages/ansible/plugins/callback/human_log.py
+fi
+
+rm aci-playbook.yml
+
+rm ansible.cfg
+if [[ -f ansible.cfg.bak ]]; then
+  mv ansible.cfg.bak ansible.cfg
+fi
+
+rm inventory
+if [[ -f inventory.bak ]]; then
+  mv inventory.bak inventory
+fi
+
+# remove ansible.retry files
+for file in ./*.retry; do
+  if [ -e "$file" ]; then
+    rm ./*.retry
+    break
+  fi
+done
+
+# remove serverspec environment
+if [[ -d aci ]] && [[ -d aci/spec ]]; then
+  rm "aci/Rakefile" "aci/spec/spec_helper.rb"
+fi
+
+# remove requirements header of all serverspec files
+find . -type f -name "*_spec.rb" | while read -r specfile; do
+  sed -i '1,2d' "${specfile}"
+done
+
+# shutdown Vagrant box
+echo -e '\n\n'
+if [[ $KEEP_TARGET = 'true' ]]; then
+  echo "<Not removing test VM as KEEP_TARGET variable in 03_RUN_TESTS job is set to 'true'>"
+else
+  echo '< Removing test VM... >'
+  ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target destroy 1> /dev/null
+  echo '< ...done >'
+fi
+
+# FINAL CLEANUP END
