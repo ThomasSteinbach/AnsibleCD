@@ -17,11 +17,6 @@
           <defaultValue>false</defaultValue>
         </hudson.model.BooleanParameterDefinition>
         <hudson.model.StringParameterDefinition>
-          <name>REPO_LABEL</name>
-          <description>The label of the repository used to identify the workspace path.</description>
-          <defaultValue></defaultValue>
-        </hudson.model.StringParameterDefinition>
-        <hudson.model.StringParameterDefinition>
           <name>ARTIFACTS_PATH</name>
           <description>The relative path to all roles/playbooks directory or just &apos;.&apos;.</description>
           <defaultValue></defaultValue>
@@ -49,7 +44,7 @@
   <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
   <triggers/>
   <concurrentBuild>false</concurrentBuild>
-  <customWorkspace>${JENKINS_HOME}/workspace/staging/${REPO_LABEL}</customWorkspace>
+  <customWorkspace>${JENKINS_HOME}/workspace/staging</customWorkspace>
   <builders>
     <hudson.tasks.Shell>
       <command>#!/bin/bash

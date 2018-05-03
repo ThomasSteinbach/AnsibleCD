@@ -22,7 +22,7 @@
     <hudson.tasks.Shell>
       <command>#!/bin/bash
 set -e
-ssh -p &quot;{{ acia_ssh_port }}&quot; &quot;{{ acia_login_user }}@{{ acia_host }}&quot; ansible-ci-target destroy</command>
+docker rm -vf ansible-ci-target</command>
     </hudson.tasks.Shell>
   </builders>
   <publishers/>

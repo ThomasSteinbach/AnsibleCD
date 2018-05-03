@@ -9,7 +9,6 @@
 #
 # $JENKINS_HOME     - The Jenkins home directory
 # $WORKSPACE        - The root of the git repository
-# $REPO_LABEL       - The label of the git repository used in ACI.
 # $ARTIFACT_NAME    - The name of the Ansible subdirectory (to roles or playbook) to test
 # $ROLES_PATH       - The value of the ansible_roles variable used in the ansible.cfg
 # $LOG_STDOUTERR    - This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console.
@@ -24,7 +23,7 @@ PLAYBOOKFILE="${2}"
 # complete identifier of playbook name
 PLAYBOOK_FQN="${ARTIFACT_NAME}/$(basename $PLAYBOOKDIR)/${PLAYBOOKFILE}"
 
-VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.vaultpass"
+VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${ARTIFACT_NAME}.vaultpass"
 TESTPLAN_FILE="${PLAYBOOKDIR}/aci/testplan"
 
 CHECK_PLAYBOOK_RESULT="Playbook ${PLAYBOOK_FQN}: \t"
@@ -65,8 +64,8 @@ function execute_hook(){
     fi
 
     chmod +x "${hook_filepath}"
-    scp -P '{{ acia_target_port }}' "${hook_filepath}" "{{ acia_target_user }}@acia.vm:/tmp/${hook_file}.sh"
-    ssh -n -p '{{ acia_target_port }}' '{{ acia_target_user }}@acia.vm' "/tmp/${hook_file}.sh"; rc=$?
+    sudo docker cp "${hook_filepath}" "ansible-ci-target:/tmp/${hook_file}.sh"
+    sudo docker exec ansible-ci-target "/tmp/${hook_file}.sh"; rc=$?
 
     if [[ $rc != 0 ]]; then
       echo -e "\n-> Hook execution ${hook_file} FAILED"
@@ -317,11 +316,14 @@ function run_custom_testplan(){
   done < "${TESTPLAN_FILE}"
 }
 
-waitForSSH() {
-  for i in {1..24}; do
-    nc -zvw 1 'acia.vm' '{{ acia_target_port }}' && break
-    sleep 5
-  done
+function create_modified_test_image(){
+  cd "$BASEDIR"
+  rm -rf CustomAciDockerContext
+  mkdir CustomAciDockerContext
+  cp DockerfileAci CustomAciDockerContext/Dockerfile
+  sed -i 's#IMAGENAME#{{ acia_docker_image }}#g' CustomAciDockerContext/Dockerfile
+  docker build -t "{{ acia_docker_image }}-modified" CustomAciDockerContext
+  cd -
 }
 
 # END DECLARE FUNCTIONS
@@ -340,20 +342,12 @@ fi
 
 # PREPARATION START
 
-# reset known_hosts file
 echo -e '\n< Starting test VM... >'
-rm "${JENKINS_HOME}/.ssh/known_hosts"
-ssh -o StrictHostKeyChecking=no -p "{{ acia_ssh_port }}" "{{ acia_login_user }}@{{ acia_host }}" date &> /dev/null
 
 # start remote target and
-ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target up 1> /dev/null
-# register target as acia.vm in /etc/hosts
-TARGET_HOST="$(ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target get-ip)"
-(grep -q 'acia.vm' /etc/hosts && sed "s/.*acia.vm.*/${TARGET_HOST} acia.vm/g" /etc/hosts | sudo tee /etc/hosts ) || echo "${TARGET_HOST} acia.vm" | sudo tee --append /etc/hosts
+create_modified_test_image
+sudo docker run -d --name ansible-ci-target --net ansibleci $(cat aci/docker_options) "{{ acia_docker_image }}-modified" /bin/sh -c 'while true; do sleep 10; echo "still alive at $(date)"; done' 1>/dev/null
 # wait for SSH on target host available
-waitForSSH
-# add target to known_hosts file
-ssh -o StrictHostKeyChecking=no -p '{{ acia_target_port }}' '{{ acia_target_user }}@acia.vm' date &> /dev/null
 echo '< ...done >'
 
 # set ansible human log
@@ -377,7 +371,7 @@ fi
 if [[ -f inventory ]]; then
   mv inventory inventory.bak
 fi
-echo "acia.vm ansible_ssh_port={{ acia_target_port }} ansible_ssh_user={{ acia_target_user }} ansible_become_pass={{ acia_target_sudo_pass }}" > inventory
+echo "ansible-ci-target ansible_connection=docker" > inventory
 
 # append requirement to head of all serverspec files
 find . -type f -name "*_spec.rb" | while read -r currentfile; do
@@ -447,7 +441,7 @@ if [[ $KEEP_TARGET = 'true' ]]; then
   echo "<Not removing test VM as KEEP_TARGET variable in 03_RUN_TESTS job is set to 'true'>"
 else
   echo '< Removing test VM... >'
-  ssh -p '{{ acia_ssh_port }}' '{{ acia_login_user }}@{{ acia_host }}' ansible-ci-target destroy 1> /dev/null
+  sudo docker rm -vf ansible-ci-target
   echo '< ...done >'
 fi
 

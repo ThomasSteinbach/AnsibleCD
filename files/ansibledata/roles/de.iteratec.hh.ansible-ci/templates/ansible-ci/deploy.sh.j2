@@ -8,7 +8,6 @@
 #
 # $JENKINS_HOME     - The Jenkins home directory
 # $WORKSPACE        - The workspace containing the repo clone
-# $REPO_LABEL       - The label of the git repository used in ACI.
 # $ARTIFACT_NAME    - The name of the Ansible subdirectory (to roles or playbook) to test
 # $ROLES_PATH       - The value of the ansible_roles variable used in the ansible.cfg
 # $LOG_STDOUTERR    - This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console.
@@ -20,8 +19,8 @@ BASEDIR=$(dirname "$0")
 # translate the parameter into a comprehensible variable
 PLAYBOOKDIR="${WORKSPACE}/${ARTIFACTS_PATH}/${ARTIFACT_NAME}"
 
-VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.vaultpass"
-BECOME_PASSWORD_FILE="${JENKINS_HOME}/passwords/${REPO_LABEL}/${ARTIFACT_NAME}.becomepass"
+VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${ARTIFACT_NAME}.vaultpass"
+BECOME_PASSWORD_FILE="${JENKINS_HOME}/passwords/${ARTIFACT_NAME}.becomepass"
 
 if [[ $ANSIBLE_VERBOSE = 'true' ]]; then
   ansible_verbosity='-vvv'

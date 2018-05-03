@@ -1,4 +1,4 @@
-FROM jenkins:1.651.1
+FROM jenkins/jenkins:2.118-slim
 MAINTAINER thomas.steinbach iteratec.de
 
 USER root
@@ -28,7 +28,7 @@ RUN apt-get update && \
     apt-get autoremove
 
 RUN easy_install pip && \
-    gem install serverspec
+    gem install serverspec docker-api
 RUN pip install setuptools \
                 ansible==2.3.1.0 \
                 docker-py==1.10.6 \
@@ -36,15 +36,12 @@ RUN pip install setuptools \
                 awscli
 
 # install required Jenkins PlugIns
-COPY files/mod_jenkins/plugins.txt /usr/share/jenkins/plugins.txt
-RUN /usr/local/bin/plugins.sh /usr/share/jenkins/plugins.txt
+COPY files/mod_jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN /usr/local/bin/install-plugins.sh < /usr/share/jenkins/ref/plugins.txt
 
 # configure Ansible
 RUN mkdir /etc/ansible && \
     echo 'localhost ansible_connection=local' >> /etc/ansible/hosts
-
-# (optional) use proxy for git
-#RUN git config --global http.proxy http://172.24.104.188:3128
 
 # setup custom Ansible installation from sources
 RUN mkdir /ansible_custom && \
@@ -74,12 +71,9 @@ RUN mkdir /used_config && \
     touch /used_config/repositories.yml && \
     touch /used_config/vault.yml
 
-# copy default inventory files
-COPY files/exampleconfig/agents.inventory /used_config/agents.inventory
-COPY files/exampleconfig/prelive.inventory /used_config/prelive.inventory
-
 # copy system and tool scripts
 COPY files/system/start.sh /usr/local/bin/start.sh
+COPY files/system/start-root.sh /usr/local/bin/start-root.sh
 COPY files/system/local_setup.sh /usr/local/bin/local_setup.sh
 COPY files/system/server_setup.sh /usr/local/bin/server_setup.sh
 
@@ -91,12 +85,11 @@ RUN usermod -a -G sudo jenkins && \
 RUN chown -R jenkins:jenkins /used_config && \
     chown -R jenkins:jenkins /ansible_custom && \
     chmod 0755 /usr/local/bin/start.sh && \
+    chmod 0755 /usr/local/bin/start-root.sh && \
     chmod 0755 /usr/local/bin/local_setup.sh && \
     chmod 0755 /usr/local/bin/server_setup.sh && \
     chmod 0644 /usr/local/lib/python2.7/dist-packages/ansible/plugins/callback/profile_tasks.py
 
 WORKDIR /ansible_config
 
-ENTRYPOINT ["/usr/local/bin/start.sh"]
-
-USER jenkins
+ENTRYPOINT ["/usr/local/bin/start-root.sh"]

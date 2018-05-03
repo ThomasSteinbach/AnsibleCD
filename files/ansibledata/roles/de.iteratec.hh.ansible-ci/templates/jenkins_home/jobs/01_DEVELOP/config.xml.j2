@@ -59,12 +59,12 @@
   <triggers/>
   {% endif %}
   <concurrentBuild>false</concurrentBuild>
-  <customWorkspace>${JENKINS_HOME}/workspace/develop/{{ item.group }}</customWorkspace>
+  <customWorkspace>${JENKINS_HOME}/workspace/develop</customWorkspace>
   <builders>
     <javaposse.jobdsl.plugin.ExecuteDslScripts plugin="job-dsl@1.42">
       <scriptText>// process Roles
 
-def rolesDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.group }}/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}&apos;)
+def rolesDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}&apos;)
 
 createRoleCheck(rolesDir)
 rolesDir.eachFile() { file -&gt; createRoleCheck(file) }
@@ -98,7 +98,7 @@ void createRoleCheck(File roleDir){
         &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
           configs {
             &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
-              properties(&apos;REPO_LABEL={{ item.group }}\nARTIFACTS_PATH={{ item.subpath_roles if item.subpath_roles is defined else '.' }}\nARTIFACT_NAME=&apos; + roleDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/develop/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
+            properties(&apos;ARTIFACTS_PATH={{ item.name }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}\nARTIFACT_NAME=&apos; + roleDir.getName() + &apos;\nROLES_PATH=/var/jenkins_home/workspace/develop/{{ item.name }}&apos;)
             }
           }
           projects(&apos;03_RUN_TESTS&apos;)
@@ -122,7 +122,7 @@ void createRoleCheck(File roleDir){
 
 // process Playbooks
 
-def playbooksDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.group }}/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}&apos;)
+def playbooksDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}&apos;)
 
 createPlaybookCheck(playbooksDir)
 playbooksDir.eachFile() { file -&gt; createPlaybookCheck(file) }
@@ -155,7 +155,7 @@ void createPlaybookCheck(File playbookDir){
         &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
           configs {
             &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
-              properties(&apos;REPO_LABEL={{ item.group }}\nARTIFACTS_PATH={{ item.subpath_playbooks if item.subpath_playbooks is defined else '.' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/develop/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
+            properties(&apos;ARTIFACTS_PATH={{ item.name }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH=/var/jenkins_home/workspace/develop/{{ item.name }}&apos;)
             }
           }
           projects(&apos;03_RUN_TESTS&apos;)
@@ -181,7 +181,7 @@ void createPlaybookCheck(File playbookDir){
 multiJob(&apos;02_RUN_PIPELINE_{{ item.group }}&apos;) {
 
     {% if (aci_install_type == 'server') and ((item.branch_staging is defined) or (item.branch_live is defined)) %}
-    customWorkspace(&apos;${JENKINS_HOME}/workspace/develop/{{ item.group }}&apos;)
+    customWorkspace(&apos;${JENKINS_HOME}/workspace/develop&apos;)
     scm {
       git {
           remote {

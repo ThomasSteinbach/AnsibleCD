@@ -12,34 +12,9 @@ fi
 
 # check if aci stack is present but must be started
 # check if 'aci' container is present but in paused state
-if [[ $(docker inspect -f "{{ .State.Paused }}" aci 2>/dev/null) ]]; then
-
-  # initialize variable (assume agent is deployed)
-  mustDeployAgents=false
-
-  # check if 'squid-deb-proxy' container is present but in paused state
-  if [[ $(docker inspect -f "{{ .State.Paused }}" squid-deb-proxy 2>/dev/null) ]]; then
-    docker start squid-deb-proxy
-  else
-    mustDeployAgents=true
-  fi
-
-  # check if 'docker-mirror' container is present but in paused state
-  if [[ $(docker inspect -f "{{ .State.Paused }}" docker-mirror 2>/dev/null) ]]; then
-    docker start docker-mirror
-  else
-    mustDeployAgents=true
-  fi
-
+if [[ $(sudo docker inspect -f "{{ .State.Paused }}" aci 2>/dev/null) ]]; then
   echo 'ACI container already exists. Starting...'
-  docker start aci
-
-  # agents are not fully configured; squid-deb-proxy and/or docker-mirror are missing
-  if [[ "$mustDeployAgents" = 'true' ]]; then
-    echo 'However your agent is not fully running, so you have to run the'
-    echo '00_SETUP_AGENTS Jenkins job again.'
-  fi
-
+  sudo docker start aci
   exit
 fi
 
@@ -59,7 +34,7 @@ fi
 # create repository configuration
 if [[ ! -f repositories.yml ]]; then
 
-  docker run --rm iteratechh/ansibleci cat /example_config/repositories.yml > repositories.yml
+  sudo docker run --rm thomass/ansibleci cat /example_config/repositories.yml > repositories.yml
 
   echo -e "aci_repository:" >> repositories.yml
 
@@ -81,7 +56,7 @@ if [[ ! -f repositories.yml ]]; then
     unset rolesfrom
     echo ''
     read -p ' An arbitrary group label identifying a group of ansible repositories [default]: ' grouplabel
-    [ -z "$grouplabel" ] && var='default'
+    [ -z "$grouplabel" ] && grouplabel='default'
     read -p ' An arbitrary but unique name for the repository: ' reponame
     read -p ' The relative subpath in the repo containing the roles (leave blank if root or none): ' rolespath
     read -p ' The relative subpath in the repo containing the playbooks (leave blank if root or none): ' playbookspath
@@ -161,20 +136,16 @@ if [[ ! -f vault.yml ]]; then
   echo 'Please provide the Vault Password.'
   echo 'You will be asked for this password whenever you start ACI from this workspace.'
   echo ''
-  ansible-vault encrypt vault.yml
+  sudo docker run -it --rm -v "$PWD:/data" --user 1000 --entrypoint ansible-vault thomass/ansibleci encrypt /data/vault.yml
 fi
 
 # copy other configuration stubs
 if [[ ! -f aci.yml ]]; then
-    docker run --rm iteratechh/ansibleci cat /example_config/aci.yml > aci.yml
-fi
-
-if [[ ! -f agents.inventory ]]; then
-    docker run --rm iteratechh/ansibleci cat /example_config/agents.inventory > agents.inventory
+    sudo docker run --rm thomass/ansibleci cat /example_config/aci.yml > aci.yml
 fi
 
 if [[ ! -f agents.yml ]]; then
-    docker run --rm iteratechh/ansibleci cat /example_config/agents.yml > agents.yml
+    sudo docker run --rm thomass/ansibleci cat /example_config/agents.yml > agents.yml
 fi
 
 # create .gitignore
@@ -190,20 +161,21 @@ clear
 
 read -s -p 'Vault Password:' avp && echo ''
 
-docker run -d \
+sudo docker run -d \
   --name aci \
   -p 24680:8080 \
   -e "ACI_VAULT_PASSWORD=$avp" \
   -e "ACIA_LOGIN_USER=$(whoami)" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$(pwd)":/ansible_config \
   $(cat conf_repository_path) \
-  iteratechh/ansibleci 1>/dev/null
+  thomass/ansibleci 1>/dev/null
 
 echo ''
 echo 'The AnsibleCI Docker container has been started.'
 echo 'You can monitor the startup and further logs with'
 echo ''
-echo '    docker logs -f aci'
+echo '    sudo docker logs -f aci'
 echo ''
 echo 'After a while ACI will be available on http://localhost:8081'
 echo ''

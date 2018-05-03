@@ -1,0 +1,11 @@
+FROM IMAGENAME
+RUN if type apt-get &>/dev/null; then \
+      apt-get update && apt-get install -y sudo python; \
+      echo 'Acquire::HTTP::Proxy "http://aci-squid-deb-proxy:8000";' >> /etc/apt/apt.conf.d/03autoproxy; \
+    elif type pacman &>/dev/null; then \
+      pacman -Sy && pacman -S --noconfirm sudo python; \
+    elif type zypper &>/dev/null; then \
+      zypper ref && zypper -n install sudo python; \
+    elif type yum &>/dev/null; then \
+      yum check-update && yum -y install sudo python; \
+    fi

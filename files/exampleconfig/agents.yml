@@ -1,51 +1,6 @@
 ---
-# The hostname/ip of the AnsibleCI Agent.
-# The host must be the same machine as the ACI Jenkins is running on, so that ACI
-# can access the virtual test machine directly per IP.
-# 172.17.0.1 would be the same host as the AnsibleCI Agent within the Docker network.
-# For AWS clients must be set to the hostname or ip provided by AWS
-acia_host: 172.17.0.1
-# The user acia will login with
-acia_login_user: thomass
-# The port the ssh daemon of the agent is reachable from
-acia_ssh_port: 22
-# If the ACIA is behind a proxy
-acia_proxy_url: None
 
-# Provider for remote test machines.
-# Supported values: [docker,vagrant,aws]
-# aws: aws-cli >= 1.11.117 required (pip install --upgrade awscli)
-acia_target_provider: vagrant
-# The port of the target machine (Vagrant or AWS)
-acia_target_port: 22
-acia_target_user: vagrant
-acia_target_home: "/home/vagrant"
-acia_target_sudo_pass: vagrant
-
-acia_docker_image: thomass/centos6-ssh
-
-## see above: 'acia_target_provider: vagrant' must be set
-# The IP address of the ACIA vagrant virtual machine
-acia_vagrant_ip: 172.28.128.3
-# The Vagrant Box used for the tests
-acia_vagrant_box: ubuntu/trusty64
-# The amount of RAM the VM uses
-acia_vagrant_memory: 3072
-
-## see above: 'acia_target_provider: aws' must be set
-## aws: aws-cli >= 1.11.117 required (pip install --upgrade awscli)
-acia_aws_image_id: ami-82be18ed
-acia_aws_key_name: default
-acia_aws_instance_type: t2.medium
-acia_aws_security_group_id: sg-xxxxxxxx
-acia_aws_subnet_id: subnet-xxxxxxxx
-# Every key is allowed but the 'Name' key!
-acia_aws_tags: "{Key=foo,Value=bar},{Key=unit,Value=finance}"
-
-# port for the squid-deb-proxy container
-acia_squid_port: 8000
-# port for the docker cache proxy
-acia_dmirror_port: 5000
+acia_docker_image: ubuntu:18.04
 
 # Following roles are executed (without test) on every target before
 # every test. Those roles provide preparations for the test environment

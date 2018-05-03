@@ -1,6 +1,0 @@
----
-
-- name: install virtualbox
-  homebrew_cask:
-    name: virtualbox
-    state: present

@@ -64,7 +64,7 @@ void createPlaybookCheck(File playbookDir){
         &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
           configs {
             &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
-              properties(&apos;REPO_LABEL={{ item.group }}\nARTIFACTS_PATH={{ item.subpath_playbooks if item.subpath_playbooks is defined else '.' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/live/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
+              properties(&apos;ARTIFACTS_PATH={{ item.name }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH={% for rpath in (item.roles_path_from | default([item.group])) %}/var/jenkins_home/workspace/live/{{ rpath }}{{ ('/' + aci_repository|selectattr("group","equalto",rpath)|map(attribute='subpath_roles')|first) if (aci_repository|selectattr("group","equalto",rpath)|selectattr("subpath_roles","defined")|list|length) > 0 else '' }}:{% endfor %}&apos;)
             }
           }
           projects(&apos;22_DEPLOY_LIVE&apos;)

@@ -18,7 +18,6 @@
     state: directory
   with_items:
     - /var/jenkins_home/users/admin
-    - /var/jenkins_home/jobs/00_SETUP_AGENTS
     - /var/jenkins_home/jobs/03_RUN_TESTS
     - /var/jenkins_home/jobs/REMOVE_TARGET
     - /var/jenkins_home/ansible-ci/serverspec/spec
@@ -28,7 +27,6 @@
     path: "{{ item }}"
     state: directory
   with_items:
-    - /var/jenkins_home/jobs/00_SETUP_PRELIVE
     - /var/jenkins_home/jobs/12_DEPLOY_STAGING
     - /var/jenkins_home/jobs/22_DEPLOY_LIVE
   when: aci_install_type == 'server'
@@ -140,7 +138,6 @@
     src: "jenkins_home/jobs/{{ item }}/config.xml.j2"
     dest: "/var/jenkins_home/jobs/{{ item }}/config.xml"
   with_items:
-    - 00_SETUP_AGENTS
     - 03_RUN_TESTS
     - REMOVE_TARGET
 
@@ -149,7 +146,6 @@
     src: "jenkins_home/jobs/{{ item }}/config.xml.j2"
     dest: "/var/jenkins_home/jobs/{{ item }}/config.xml"
   with_items:
-    - 00_SETUP_PRELIVE
     - 12_DEPLOY_STAGING
     - 22_DEPLOY_LIVE
   when: aci_install_type == 'server' 
@@ -181,6 +177,7 @@
     - check-playbook.sh
     - deploy.sh
     - serverspec/spec/spec_helper.rb
+    - DockerfileAci
 
 - name: make test scripts executable
   file:
@@ -190,3 +187,30 @@
     - run-tests.sh
     - check-playbook.sh
     - deploy.sh
+
+- name: create image for squid deb proxy
+  docker_image:
+    path: /ansible_data/roles/de.iteratec.hh.ansible-ci/files/squid-deb-proxy
+    name: ansible-ci/squid-deb-proxy
+
+- name: create ansibleci network
+  docker_network:
+    name: ansibleci
+    connected:
+      - aci
+    appends: yes
+
+- name: create squid deb proxy container
+  docker_container:
+    name: aci-squid-deb-proxy
+    image: ansible-ci/squid-deb-proxy
+    networks:
+      - name: ansibleci
+    purge_networks: yes
+
+- name: create prelive machines
+  docker_container:
+    name: "aci-{{ item.name }}"
+    image: "{{ item.image }}"
+  with_items: "{{ aci_prelive_machines }}"
+  when: aci_install_type == 'server'

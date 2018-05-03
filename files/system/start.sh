@@ -23,14 +23,14 @@ function assure_prerequisites(){
     echo -e '\nFor local usage of ACI create a new, empty workspace folder, run the'
     echo 'following commands inside and follow the instructions: '
     echo ''
-    echo '  docker run --rm iteratechh/ansibleci local-setup > aci.sh'
+    echo '  docker run --rm thomass/ansibleci local-setup > aci.sh'
     echo '  chmod +x aci.sh'
     echo '  ./aci.sh'
     echo ''
     echo ''
     echo 'For deploying ACI on a remote server run the following command instead:'
     echo ''
-    echo '  docker run -it --rm -v "$PWD":/ansible_config iteratechh/ansibleci server-setup'
+    echo '  docker run -it --rm -v "$PWD":/ansible_config thomass/ansibleci server-setup'
 
     exit
   fi
