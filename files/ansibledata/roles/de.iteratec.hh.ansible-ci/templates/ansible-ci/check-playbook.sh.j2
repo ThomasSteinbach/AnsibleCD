@@ -64,8 +64,8 @@ function execute_hook(){
     fi
 
     chmod +x "${hook_filepath}"
-    sudo docker cp "${hook_filepath}" "ansible-ci-target:/tmp/${hook_file}.sh"
-    sudo docker exec ansible-ci-target "/tmp/${hook_file}.sh"; rc=$?
+    sudo docker cp "${hook_filepath}" "ansible-ci-target-${CONTAINERPOSTFIX}:/tmp/${hook_file}.sh"
+    sudo docker exec ansible-ci-target-${CONTAINERPOSTFIX} "/tmp/${hook_file}.sh"; rc=$?
 
     if [[ $rc != 0 ]]; then
       echo -e "\n-> Hook execution ${hook_file} FAILED"
@@ -346,7 +346,8 @@ echo -e '\n< Starting test VM... >'
 
 # start remote target and
 create_modified_test_image
-sudo docker run -d --name ansible-ci-target --net ansibleci $(cat aci/docker_options) "{{ acia_docker_image }}-modified" /bin/sh -c 'while true; do sleep 10; echo "still alive at $(date)"; done' 1>/dev/null
+CONTAINERPOSTFIX="${ARTIFACT_NAME}-$(date '+%H%M%S%N')"
+sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci $(cat aci/docker_options) "{{ acia_docker_image }}-modified" /bin/sh -c 'while true; do sleep 10; echo "still alive at $(date)"; done' 1>/dev/null
 # wait for SSH on target host available
 echo '< ...done >'
 
@@ -371,7 +372,7 @@ fi
 if [[ -f inventory ]]; then
   mv inventory inventory.bak
 fi
-echo "ansible-ci-target ansible_connection=docker" > inventory
+echo "ansible-ci-target ansible_connection=docker ansible_host=ansible-ci-target-${CONTAINERPOSTFIX}" > inventory
 
 # append requirement to head of all serverspec files
 find . -type f -name "*_spec.rb" | while read -r currentfile; do
@@ -381,6 +382,7 @@ done
 # add serverspec environment
 if [[ -d aci ]] && [[ -d aci/spec ]]; then
   cp -a "${BASEDIR}/serverspec/." aci/
+  sed -i "s#ansible-ci-target#ansible-ci-target-${CONTAINERPOSTFIX}#g" aci/spec/spec_helper.rb
 fi
 
 # PREPARATION END
@@ -441,7 +443,7 @@ if [[ $KEEP_TARGET = 'true' ]]; then
   echo "<Not removing test VM as KEEP_TARGET variable in 03_RUN_TESTS job is set to 'true'>"
 else
   echo '< Removing test VM... >'
-  sudo docker rm -vf ansible-ci-target
+  sudo docker rm -vf "ansible-ci-target-${CONTAINERPOSTFIX}"
   echo '< ...done >'
 fi
 

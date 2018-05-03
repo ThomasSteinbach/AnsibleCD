@@ -20,6 +20,7 @@ aci_proxy_url: None
 # Proxy URL for git, which would override aci_proxy_url,
 # also when beeing just an empty string:
 aci_git_proxy_url: None
+
 # Proxy URL for aws cli, which would override aci_proxy_url,
 # also when beeing just an empty string:
 aci_awscli_proxy_url: None
