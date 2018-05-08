@@ -1,6 +1,6 @@
 ---
 
-acia_docker_image: ubuntu:18.04
+acia_docker_image: "thomass/ansiblecd-ubuntu1804"
 
 # Following roles are executed (without test) on every target before
 # every test. Those roles provide preparations for the test environment

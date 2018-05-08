@@ -30,9 +30,9 @@ RUN apt-get update && \
 RUN easy_install pip && \
     gem install serverspec docker-api
 RUN pip install setuptools \
-                ansible==2.3.1.0 \
+                ansible==2.4.4.0 \
                 docker-py==1.10.6 \
-                ansible-lint==3.4.13 \
+                ansible-lint==3.4.21 \
                 awscli
 
 # install required Jenkins PlugIns

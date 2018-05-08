@@ -74,6 +74,8 @@ void createRoleCheck(File roleDir){
 
   if(aciDir.exists()){
     job(&apos;TR_{{ item.group }}_&apos; + roleDir.getName()){
+      
+      customWorkspace('${JENKINS_HOME}/workspace/develop')
 
       {% if aci_install_type == 'server' %}
       scm {
@@ -88,34 +90,28 @@ void createRoleCheck(File roleDir){
       }
       {% endif %}
 
-      blockOn([&apos;TR_.*',&apos;TP_.*&apos;])
+      parameters {
+        booleanParam('LOG_STDOUTERR', false, 'This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console. This setting would be overridden on next execution of the ACI installation playbook.')
+        booleanParam('ANSIBLE_VERBOSE', false, 'This variable can be set by the user to make Ansible output more verbose (-vvv). This setting would be overridden on next execution of the ACI installation playbook.')
+        booleanParam('KEEP_TARGET', false, 'This variable can be set by the user to keep the target test machine alive after each Ansible run. This setting would be overridden on next execution of the ACI installation playbook.')
+        stringParam('ARTIFACTS_PATH', "{{ item.name }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}", "The relative path to all roles/playbooks directory or just &apos;.&apos;.")
+        stringParam('ARTIFACT_NAME', roleDir.getName(), 'The name of the Ansible role/playbook to test.')
+        stringParam('ROLES_PATH', '/var/jenkins_home/workspace/develop/{{ item.name }}', 'The roles_path setting for the playbooks ansible.cfg')
+      }
 
-      configure { project -&gt;
-        project /
-        builders /
-        &apos;hudson.plugins.parameterizedtrigger.TriggerBuilder&apos;(plugin: &quot;parameterized-trigger@2.30&quot;) /
-        configs /
-        &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
-          configs {
-            &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
-            properties(&apos;ARTIFACTS_PATH={{ item.name }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}\nARTIFACT_NAME=&apos; + roleDir.getName() + &apos;\nROLES_PATH=/var/jenkins_home/workspace/develop/{{ item.name }}&apos;)
-            }
-          }
-          projects(&apos;03_RUN_TESTS&apos;)
-          condition(&apos;ALWAYS&apos;)
-       	  block {
-            buildStepFailureThreshold {
-              ordinal(2)
-          	  }
-            unstableThreshold {
-              ordinal(1)
-          	  }
-            failureThreshold {
-              ordinal(2)
-          	  }
-       		}
-          }
-   		}
+      steps {
+      shell('''
+#!/bin/bash
+set -e
+echo &quot;CHECK ${ARTIFACT_NAME}&quot;
+&quot;${JENKINS_HOME}/ansible-ci/run-tests.sh&quot; &quot;examples&quot;
+''')
+      }
+
+      wrappers {
+        colorizeOutput()
+      }
+      
     }
   }
 }
@@ -134,6 +130,8 @@ void createPlaybookCheck(File playbookDir){
   if(playbookFile.exists() || playbooksDefinitionFile.exists()){
     job(&apos;TP_{{ item.group }}_&apos; + playbookDir.getName()){
 
+      customWorkspace('${JENKINS_HOME}/workspace/develop')
+
       {% if aci_install_type == 'server' %}
       scm {
         git {
@@ -147,32 +145,28 @@ void createPlaybookCheck(File playbookDir){
       }
       {% endif %}
 
-      configure { project -&gt;
-        project /
-        builders /
-        &apos;hudson.plugins.parameterizedtrigger.TriggerBuilder&apos;(plugin: &quot;parameterized-trigger@2.30&quot;) /
-        configs /
-        &apos;hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig&apos; &lt;&lt; {
-          configs {
-            &apos;hudson.plugins.parameterizedtrigger.PredefinedBuildParameters&apos; {
-            properties(&apos;ARTIFACTS_PATH={{ item.name }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}\nARTIFACT_NAME=&apos; + playbookDir.getName() + &apos;\nROLES_PATH=/var/jenkins_home/workspace/develop/{{ item.name }}&apos;)
-            }
-          }
-          projects(&apos;03_RUN_TESTS&apos;)
-          condition(&apos;ALWAYS&apos;)
-       	  block {
-            buildStepFailureThreshold {
-              ordinal(2)
-          	  }
-            unstableThreshold {
-              ordinal(1)
-          	  }
-            failureThreshold {
-              ordinal(2)
-          	  }
-       		}
-          }
-   		}
+      parameters {
+        booleanParam('LOG_STDOUTERR', false, 'This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console. This setting would be overridden on next execution of the ACI installation playbook.')
+        booleanParam('ANSIBLE_VERBOSE', false, 'This variable can be set by the user to make Ansible output more verbose (-vvv). This setting would be overridden on next execution of the ACI installation playbook.')
+        booleanParam('KEEP_TARGET', false, 'This variable can be set by the user to keep the target test machine alive after each Ansible run. This setting would be overridden on next execution of the ACI installation playbook.')
+        stringParam('ARTIFACTS_PATH', "{{ item.name }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}", "The relative path to all roles/playbooks directory or just &apos;.&apos;.")
+        stringParam('ARTIFACT_NAME', playbookDir.getName(), 'The name of the Ansible role/playbook to test.')
+        stringParam('ROLES_PATH', '/var/jenkins_home/workspace/develop/{{ item.name }}', 'The roles_path setting for the playbooks ansible.cfg')
+      }
+
+      steps {
+      shell('''
+#!/bin/bash
+set -e
+echo &quot;CHECK ${ARTIFACT_NAME}&quot;
+&quot;${JENKINS_HOME}/ansible-ci/run-tests.sh&quot; &quot;examples&quot;
+''')
+      }
+
+      wrappers {
+        colorizeOutput()
+      }
+
     }
   }
 }

@@ -132,9 +132,9 @@ function executeGlobalRole() {
 
     cp "${JENKINS_HOME}/ansible-ci/global-roles.yml" .
     if [[ -f ${VAULT_PASSWORD_FILE} ]]; then
-      eval "ansible-playbook $custom_ansible_options --vault-password-file \"${VAULT_PASSWORD_FILE}\" global-roles.yml" #&> /dev/null
+      eval "ansible-playbook --diff $custom_ansible_options --vault-password-file \"${VAULT_PASSWORD_FILE}\" global-roles.yml" #&> /dev/null
     else
-      eval "ansible-playbook $custom_ansible_options global-roles.yml" #&> /dev/null
+      eval "ansible-playbook --diff $custom_ansible_options global-roles.yml" #&> /dev/null
     fi
     rm global-roles.yml
     echo -e '\n'
@@ -189,9 +189,9 @@ function execute_ansible(){
   echo ''
   # here I used 'dirty' eval because $custom_ansible_options can contain strings like --extra-vars "var1=one var2=one" which will be substituted to --extra-vars '"var1=one var2=one"'
   if [[ -f ${VAULT_PASSWORD_FILE} ]]; then
-    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook $custom_ansible_options $ansible_verbosity --vault-password-file \"${VAULT_PASSWORD_FILE}\" aci-playbook.yml | tee ansibleciout.txt"
+    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook --diff $custom_ansible_options $ansible_verbosity --vault-password-file \"${VAULT_PASSWORD_FILE}\" aci-playbook.yml | tee ansibleciout.txt"
   else
-    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook $custom_ansible_options $ansible_verbosity aci-playbook.yml | tee ansibleciout.txt"
+    eval "ANSIBLE_FORCE_COLOR=true ansible-playbook --diff $custom_ansible_options $ansible_verbosity aci-playbook.yml | tee ansibleciout.txt"
   fi
 
   # evaluate results
@@ -347,7 +347,7 @@ echo -e '\n< Starting test VM... >'
 # start remote target and
 create_modified_test_image
 CONTAINERPOSTFIX="${ARTIFACT_NAME}-$(date '+%H%M%S%N')"
-sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci $(cat aci/docker_options) "{{ acia_docker_image }}-modified" /bin/sh -c 'while true; do sleep 10; echo "still alive at $(date)"; done' 1>/dev/null
+sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci --cap-add SYS_ADMIN --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro $(cat aci/docker_options) "{{ acia_docker_image }}-modified" 1>/dev/null
 # wait for SSH on target host available
 echo '< ...done >'
 
