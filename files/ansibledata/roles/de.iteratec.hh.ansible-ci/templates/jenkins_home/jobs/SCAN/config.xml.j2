@@ -67,9 +67,13 @@
 def rolesDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_roles) if item.subpath_roles is defined else '' }}&apos;)
 
 createRoleCheck(rolesDir)
-rolesDir.eachFile() { file -&gt; createRoleCheck(file) }
 
 void createRoleCheck(File roleDir){
+
+  if(!roleDir.exists() || roleDir.isFile()){
+    return;
+  }
+
   def aciDir = new java.io.File(roleDir.getAbsolutePath() + &apos;/examples&apos;)
 
   if(aciDir.exists()){
@@ -114,6 +118,9 @@ echo &quot;CHECK ${ARTIFACT_NAME}&quot;
       
     }
   }
+  else {
+    roleDir.eachFile() { file -&gt; createRoleCheck(file) }
+  }
 }
 
 // process Playbooks
@@ -121,9 +128,15 @@ echo &quot;CHECK ${ARTIFACT_NAME}&quot;
 def playbooksDir = new java.io.File(&apos;/var/jenkins_home/workspace/develop/{{ item.name if item.name is defined else (item.url | basename) }}{{ ('/' + item.subpath_playbooks) if item.subpath_playbooks is defined else '' }}&apos;)
 
 createPlaybookCheck(playbooksDir)
-playbooksDir.eachFile() { file -&gt; createPlaybookCheck(file) }
 
 void createPlaybookCheck(File playbookDir){
+
+  def aciDir = new java.io.File(playbookDir.getAbsolutePath() + &apos;/examples&apos;)
+
+  if(!playbookDir.exists() || playbookDir.isFile() || aciDir.exists()){
+    return;
+  }
+
   def playbookFile = new java.io.File(playbookDir.getAbsolutePath() + &apos;/site.yml&apos;)
   def playbooksDefinitionFile = new java.io.File(playbookDir.getAbsolutePath() + &apos;/aci/playbooks&apos;)
 
@@ -168,6 +181,9 @@ echo &quot;CHECK ${ARTIFACT_NAME}&quot;
       }
 
     }
+  }
+  else {
+    playbookDir.eachFile() { file -&gt; createPlaybookCheck(file) }
   }
 }
 

@@ -40,7 +40,7 @@ aci_server_port: 24680
 # Diese Zahl limitiert die Anzahl der gleichzeitig zu testenden Roles.
 # Sollen mehr Roles verarbeitet werden, muss die Zahl höher gesetzt werden,
 # da sich die Role-Jobs ansonsten gegenseitig blockieren (deadlock!).
-aci_executor_count: 5
+aci_executor_count: 3
 
 # Ob nach dem Scannen der Repositories automatisch die Tests angestoßen werden.
 # Wird nur bei aci_install_type=server ausgewertet.

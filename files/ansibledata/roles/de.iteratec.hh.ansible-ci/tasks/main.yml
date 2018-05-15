@@ -18,8 +18,7 @@
     state: directory
   with_items:
     - /var/jenkins_home/users/admin
-    - /var/jenkins_home/jobs/03_RUN_TESTS
-    - /var/jenkins_home/jobs/REMOVE_TARGET
+    - /var/jenkins_home/jobs/REMOVE_TARGETS
     - /var/jenkins_home/ansible-ci/serverspec/spec
 
 - name: create nescessary directories in /var/jenkins_home on server
@@ -99,7 +98,7 @@
 
 - name: create job paths
   file:
-    path: "/var/jenkins_home/jobs/01_DEVELOP_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}"
+    path: "/var/jenkins_home/jobs/SCAN_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}"
     state: directory
   with_items:
     - "{{ aci_repository }}"
@@ -113,10 +112,10 @@
     - "{{ aci_repository }}"
   when: aci_install_type == 'server'
 
-- name: copy 01_DEVELOP tasks
+- name: copy SCAN tasks
   template:
-    src: "jenkins_home/jobs/01_DEVELOP/config.xml.j2"
-    dest: "/var/jenkins_home/jobs/01_DEVELOP_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}/config.xml"
+    src: "jenkins_home/jobs/SCAN/config.xml.j2"
+    dest: "/var/jenkins_home/jobs/SCAN_{{ item.group }}_{{ item.name if item.name is defined else (item.url | basename) }}/config.xml"
   with_items: "{{ aci_repository }}"
 
 - name: copy 11_STAGING tasks
@@ -138,8 +137,7 @@
     src: "jenkins_home/jobs/{{ item }}/config.xml.j2"
     dest: "/var/jenkins_home/jobs/{{ item }}/config.xml"
   with_items:
-    - 03_RUN_TESTS
-    - REMOVE_TARGET
+    - REMOVE_TARGETS
 
 - name: copy further jenkins tasks
   template:

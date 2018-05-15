@@ -67,10 +67,9 @@
       <properties class="hudson.model.View$PropertyList"/>
       <jobNames>
         <comparator class="hudson.util.CaseInsensitiveComparator"/>
-        <string>03_RUN_TESTS</string>
         <string>12_DEPLOY_STAGING</string>
         <string>22_DEPLOY_LIVE</string>
-        <string>REMOVE_TARGET</string>
+        <string>REMOVE_TARGETS</string>
       </jobNames>
       <jobFilters/>
       <columns>
@@ -82,7 +81,7 @@
         <hudson.views.LastDurationColumn/>
         <hudson.views.BuildButtonColumn/>
       </columns>
-      <includeRegex>01_DEVELOP.*|02_RUN_PIPELINE.*|11_STAGING.*|21_LIVE.*</includeRegex>
+      <includeRegex>SCAN.*|02_RUN_PIPELINE.*|11_STAGING.*|21_LIVE.*</includeRegex>
       <recurse>false</recurse>
     </listView>
     <listView>

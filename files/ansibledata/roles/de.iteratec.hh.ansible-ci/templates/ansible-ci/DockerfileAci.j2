@@ -2,9 +2,10 @@ FROM IMAGENAME
 RUN if type apt-get &>/dev/null; then \
       echo 'Acquire::HTTP::Proxy "http://aci-squid-deb-proxy:8000";' >> /etc/apt/apt.conf.d/03autoproxy; \
     elif type pacman &>/dev/null; then \
-      echo 'Proxy not implemented yet'; \
+      sed -i 's%#XferCommand = /usr/bin/curl%XferCommand = /usr/bin/curl --proxy http://aci-squid-deb-proxy:8000%g' /etc/pacman.conf; \
     elif type zypper &>/dev/null; then \
       echo 'Proxy not implemented yet'; \
     elif type yum &>/dev/null; then \
-      echo 'Proxy not implemented yet'; \
+      echo 'proxy=http://aci-squid-deb-proxy:8000' >> /etc/yum.conf; \
+      rm -f /etc/yum/pluginconf.d/fastestmirror.conf; \
     fi

@@ -22,7 +22,7 @@
     <hudson.tasks.Shell>
       <command>#!/bin/bash
 set -e
-docker rm -vf ansible-ci-target</command>
+docker rm -vf $(docker ps -f "name=ansible-ci-target" -q)</command>
     </hudson.tasks.Shell>
   </builders>
   <publishers/>

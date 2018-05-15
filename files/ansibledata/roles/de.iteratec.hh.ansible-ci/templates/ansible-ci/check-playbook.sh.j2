@@ -13,6 +13,7 @@
 # $ROLES_PATH       - The value of the ansible_roles variable used in the ansible.cfg
 # $LOG_STDOUTERR    - This variable can be set by the user to make Ansible printing STDOUT/STDERR on the console.
 # $ANSIBLE_VERBOSE  - This variable can be set by the user to make Ansible output more verbose (-vvv).
+# $TEST_IMAGE       - The Docker Image to use for tests
 
 # get the working dir of the script
 BASEDIR=$(dirname "$0")
@@ -26,7 +27,7 @@ PLAYBOOK_FQN="${ARTIFACT_NAME}/$(basename $PLAYBOOKDIR)/${PLAYBOOKFILE}"
 VAULT_PASSWORD_FILE="${JENKINS_HOME}/passwords/${ARTIFACT_NAME}.vaultpass"
 TESTPLAN_FILE="${PLAYBOOKDIR}/aci/testplan"
 
-CHECK_PLAYBOOK_RESULT="Playbook ${PLAYBOOK_FQN}: \t"
+CHECK_PLAYBOOK_RESULT="Playbook ${PLAYBOOK_FQN} on ${TEST_IMAGE}:"
 
 if [[ $ANSIBLE_VERBOSE = 'true' ]]; then
   ansible_verbosity='-vvv'
@@ -38,7 +39,7 @@ function execute_hook(){
   hook_file=$1
   hook_filepath="aci/hooks/${hook_file}.sh"
 
-  STEP_RESULT='PASSED'
+  STEP_RESULT="$STRING_PASSED"
 
   # user header
   echo -e '\n\n'
@@ -48,7 +49,7 @@ function execute_hook(){
 
   if [[ $PLAYBOOK_FAILED = 'true' ]]; then
     echo -e "\n-> Hook execution ${hook_file} SKIPPED due to previous errors"
-    STEP_RESULT='SKIPPED'
+    STEP_RESULT="$STRING_SKIPPED"
     return
   fi
 
@@ -69,7 +70,7 @@ function execute_hook(){
 
     if [[ $rc != 0 ]]; then
       echo -e "\n-> Hook execution ${hook_file} FAILED"
-      STEP_RESULT='FAILED'
+      STEP_RESULT="$STRING_FAILED"
       PLAYBOOK_FAILED=true
     fi
 
@@ -78,10 +79,10 @@ function execute_hook(){
     fi
   else
     echo -e "\n-> Hook execution ${hook_file} SKIPPED - no hook file found"
-    STEP_RESULT='SKIPPED'
+    STEP_RESULT="$STRING_SKIPPED"
   fi
 
-  if [[ $STEP_RESULT == 'PASSED' ]]; then
+  if [[ $STEP_RESULT == "$STRING_PASSED" ]]; then
     echo -e "\n-> Hook execution ${hook_file} PASSED"
   fi
 }
@@ -150,7 +151,7 @@ function execute_ansible(){
   custom_check_statement=$2
   custom_ansible_options=${3:-""}
 
-  STEP_RESULT='PASSED'
+  STEP_RESULT="$STRING_PASSED"
 
   # user header
   echo -e '\n\n'
@@ -160,7 +161,7 @@ function execute_ansible(){
 
   if [[ $PLAYBOOK_FAILED = 'true' ]]; then
     echo -e "\n-> Ansible ${run_name} SKIPPED due to previous errors"
-    STEP_RESULT='SKIPPED'
+    STEP_RESULT="$STRING_SKIPPED"
     return
   fi
 
@@ -198,7 +199,7 @@ function execute_ansible(){
   grep -q 'unreachable=0\s*failed=0' ansibleciout.txt; rc=$?
   if [[ $rc != 0 ]]; then
     echo -e "\n-> Ansible ${run_name} FAILED"
-    STEP_RESULT='FAILED'
+    STEP_RESULT="$STRING_FAILED"
     PLAYBOOK_FAILED=true
   elif [[ ${custom_check_statement} ]]; then
 
@@ -206,12 +207,12 @@ function execute_ansible(){
     if [[ $rc != 0 ]]; then
       echo -e "\n-> Ansible ${run_name} FAILED"
       echo -e "-> expected '${custom_check_statement}' in Ansibles output"
-      STEP_RESULT='FAILED'
+      STEP_RESULT="$STRING_FAILED"
       PLAYBOOK_FAILED=true
     fi
   fi
 
-  if [[ $STEP_RESULT == 'PASSED' ]]; then
+  if [[ $STEP_RESULT == "$STRING_PASSED" ]]; then
     echo -e "\n-> Ansible ${run_name} PASSED"
   fi
 
@@ -220,7 +221,7 @@ function execute_ansible(){
 
 function execute_serverspec(){
 
-  STEP_RESULT='PASSED'
+  STEP_RESULT="$STRING_PASSED"
 
   if [[ -d "aci/spec" ]]; then
 
@@ -237,7 +238,7 @@ function execute_serverspec(){
 
     if [[ $PLAYBOOK_FAILED = 'true' ]]; then
       echo -e "\n-> Serverspec ${specfile} SKIPPED due to previous errors"
-      STEP_RESULT='SKIPPED'
+      STEP_RESULT="$STRING_SKIPPED"
       return
     fi
 
@@ -250,16 +251,16 @@ function execute_serverspec(){
     # evaluate results
     if [[ $rc != 0 ]]; then
         echo -e "\n-> Serverspec ${specfile} FAILED"
-        STEP_RESULT='FAILED'
+        STEP_RESULT="$STRING_FAILED"
         PLAYBOOK_FAILED=true
     fi
   else
     echo -e "\n-> Serverspec ${specfile} SKIPPED"
     echo -e "-> No 'spec' directory found"
-    STEP_RESULT='SKIPPED'
+    STEP_RESULT="$STRING_SKIPPED"
   fi
 
-  if [[ $STEP_RESULT == 'PASSED' ]]; then
+  if [[ $STEP_RESULT == "$STRING_PASSED" ]]; then
     echo -e "\n-> Serverspec ${specfile} PASSED"
   fi
 }
@@ -267,22 +268,22 @@ function execute_serverspec(){
 function run_default_testplan(){
 
   execute_hook before-playbooks
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}Before-Hook: ${STEP_RESULT}; "
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Before-Hook: ${STEP_RESULT}"
 
   execute_ansible "First Run"
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}Ansible First Run: $STEP_RESULT"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Ansible First Run: $STEP_RESULT"
 
   execute_hook between-playbooks
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Between-Hook: $STEP_RESULT"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Between-Hook: $STEP_RESULT"
 
   execute_ansible 'Repeated Run' 'IDEMPOTENCY' '--diff'
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Ansible Repeated Run: $STEP_RESULT"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Ansible Repeated Run: $STEP_RESULT"
 
   execute_hook after-playbooks
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; After-Hook: $STEP_RESULT"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  After-Hook: $STEP_RESULT"
 
   execute_serverspec
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}; Serverspec: $STEP_RESULT"
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Serverspec: $STEP_RESULT"
 }
 
 function run_custom_testplan(){
@@ -321,8 +322,8 @@ function create_modified_test_image(){
   rm -rf CustomAciDockerContext
   mkdir CustomAciDockerContext
   cp DockerfileAci CustomAciDockerContext/Dockerfile
-  sed -i 's#IMAGENAME#{{ acia_docker_image }}#g' CustomAciDockerContext/Dockerfile
-  docker build -t "{{ acia_docker_image }}-modified" CustomAciDockerContext
+  sed -i "s#IMAGENAME#${TEST_IMAGE}#g" CustomAciDockerContext/Dockerfile
+  docker build -t "${TEST_IMAGE}-modified" CustomAciDockerContext
   cd -
 }
 
@@ -332,7 +333,7 @@ cd "${PLAYBOOKDIR}"
 
 echo -e '\n\n'
 echo "=========================================================================="
-echo "= Execute Playbook ${PLAYBOOK_FQN}"
+echo "= Execute Playbook ${PLAYBOOK_FQN} on ${TEST_IMAGE}"
 echo "=========================================================================="
 
 if [[ ! -f $PLAYBOOKFILE ]]; then
@@ -345,9 +346,9 @@ fi
 echo -e '\n< Starting test VM... >'
 
 # start remote target and
-create_modified_test_image
+create_modified_test_image 1>/dev/null
 CONTAINERPOSTFIX="${ARTIFACT_NAME}-$(date '+%H%M%S%N')"
-sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci --cap-add SYS_ADMIN --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro $(cat aci/docker_options) "{{ acia_docker_image }}-modified" 1>/dev/null
+sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci --privileged --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro $(if [ -f aci/docker_options ]; then cat aci/docker_options; fi) "${TEST_IMAGE}-modified" 1>/dev/null
 # wait for SSH on target host available
 echo '< ...done >'
 
@@ -390,7 +391,7 @@ fi
 
 # RUN TESTS
 
-STEP_RESULT='PASSED'
+STEP_RESULT="$STRING_PASSED"
 PLAYBOOK_FAILED=false
 
 executeGlobalRole
@@ -440,7 +441,7 @@ done
 # shutdown Vagrant box
 echo -e '\n\n'
 if [[ $KEEP_TARGET = 'true' ]]; then
-  echo "<Not removing test VM as KEEP_TARGET variable in 03_RUN_TESTS job is set to 'true'>"
+  echo "<Not removing test VM as KEEP_TARGET variable in job is set to 'true'>"
 else
   echo '< Removing test VM... >'
   sudo docker rm -vf "ansible-ci-target-${CONTAINERPOSTFIX}"

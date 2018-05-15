@@ -15,6 +15,10 @@ BASEDIR=$(dirname $0)
 EXAMPLESDIRNAME="${1}"
 ARTIFACTDIR="${WORKSPACE}/${ARTIFACTS_PATH}/${ARTIFACT_NAME}"
 
+STRING_PASSED='\033[1;32mPASSED\033[0m'
+STRING_SKIPPED='\033[1;34mSKIPPED\033[0m'
+STRING_FAILED='\033[1;31mFAILED\033[0m'
+
 cd $"${ARTIFACTDIR}"
 
 # determine if to check Role or Playbook
@@ -38,7 +42,7 @@ echo -e "\n\n"
 echo " Linting Ansible Code"
 echo "==============================="
 echo ""
-result_linting='PASSED'
+result_linting="$STRING_PASSED"
 for f in $(find . -name "*.yml"); do
     # skip lint excludes
     if [[ -f "${EXAMPLESDIR}/aci/lint-excludes" ]]; then
@@ -55,10 +59,10 @@ for f in $(find . -name "*.yml"); do
       rc2=$?
       if [[ $rc2 == 0 ]]; then
         echo "-> [SKIPPED] $f - vault files could not be linted"
-        result_linting='SKIPPED'
+        result_linting="$STRING_SKIPPED"
       else
         echo "-> [FAIL] $f"
-        result_linting='FAILED'
+        result_linting="$STRING_FAILED"
       fi
     else
         echo "-> [SUCCESS] $f"
@@ -67,19 +71,19 @@ done
 rm linterror
 
 PLAYBOOK_RESULTS=()
-result_playbook_checks='PASSED'
-if [[ $result_linting == 'FAILED' ]]; then
+result_playbook_checks="$STRING_PASSED"
+if [[ $result_linting == "$STRING_FAILED" ]]; then
   echo -e "\n\n"
   echo "==============================="
   echo "= Skip Playbook executions    ="
   echo "==============================="
-  result_playbook_checks='SKIPPED'
+  result_playbook_checks="$STRING_SKIPPED"
 elif [[ ! $(ls) ]]; then
   echo -e "\n\n"
   echo "========================================================================="
   echo "= [ERROR] ${playbook} - No Playbook directorys found inside examples    ="
   echo "========================================================================="
-  result_playbook_checks='FAILED'
+  result_playbook_checks="$STRING_FAILED"
 else
   if [[ $CHECK_PLAYBOOK = true ]]; then
     PLAYBOOK_FOLDERS="."
@@ -100,17 +104,27 @@ else
     fi
 
     for name in "${playbooknames[@]}"; do
-      source "${BASEDIR}/check-playbook.sh" "${EXAMPLESDIR}/${playbook}" "$name"
 
-      # evaluate result
-      grep -q 'FAILED' <<< "${CHECK_PLAYBOOK_RESULT}"; rc=$?
-      if [[ $rc == 0 ]]; then
-          echo "-> [FAIL] ${playbook}"
-          result_playbook_checks='FAILED'
+      if [ -f "${EXAMPLESDIR}/${playbook}/aci/docker_images" ]; then
+        TEST_IMAGES=$(cat "${EXAMPLESDIR}/${playbook}/aci/docker_images");
       else
-          echo "-> [SUCCESS] ${playbook}"
+        TEST_IMAGES=({% for image in acia_docker_images %}{{ image }} {% endfor %})
       fi
-      PLAYBOOK_RESULTS+=("${CHECK_PLAYBOOK_RESULT}")
+
+      for TEST_IMAGE in ${TEST_IMAGES[*]}; do
+
+        source "${BASEDIR}/check-playbook.sh" "${EXAMPLESDIR}/${playbook}" "$name"
+
+        # evaluate result
+        grep -q -F "$STRING_FAILED" <<< "${CHECK_PLAYBOOK_RESULT}"; rc=$?
+        if [[ $rc == 0 ]]; then
+            echo "-> [FAIL] ${playbook}"
+            result_playbook_checks="$STRING_FAILED"
+        else
+            echo "-> [SUCCESS] ${playbook}"
+        fi
+        PLAYBOOK_RESULTS+=("${CHECK_PLAYBOOK_RESULT}")
+      done
     done
   done
 fi
@@ -120,14 +134,13 @@ echo "==============================="
 echo "= Evaluation Summary          ="
 echo "==============================="
 echo ""
-echo "Linting: $result_linting"
-echo "Playbook Checks: $result_playbook_checks"
+echo -e "Linting: $result_linting"
 for result in "${PLAYBOOK_RESULTS[@]}"; do
   echo -e "$result"
 done
 echo ""
 echo "=============================================================================================="
 echo ""
-if [[ $result_linting == 'FAILED' || $result_playbook_checks == 'FAILED' ]]; then
+if [[ $result_linting == "$STRING_FAILED" || $result_playbook_checks == "$STRING_FAILED" ]]; then
     exit 1
 fi

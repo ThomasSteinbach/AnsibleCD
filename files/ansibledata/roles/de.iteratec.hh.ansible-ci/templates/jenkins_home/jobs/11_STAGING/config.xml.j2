@@ -71,7 +71,7 @@ void createPlaybookCheck(File playbookDir){
                 &apos;hudson.plugins.git.extensions.impl.SparseCheckoutPaths&apos; {
                   &apos;sparseCheckoutPaths&apos; {
                     &apos;hudson.plugins.git.extensions.impl.SparseCheckoutPath&apos; {
-           				 path(&apos;{{ (item.subpath_playbooks + '/') if item.subpath_playbooks is defined else '' }}&apos; + playbookDir.getName())
+                                         path(&apos;{{ (item.subpath_playbooks + '/') if item.subpath_playbooks is defined else '' }}&apos; + playbookDir.getName())
                     }
                   }
                 }

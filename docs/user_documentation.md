@@ -4,7 +4,7 @@ The following sections describe how to use ACI for testing your Ansible artifact
 
 ## First Steps
 
-After you have configured and run the ACI-Installation-Playbook you can access the AnsibleCI (Jenkins), which will show you at least the `03_RUN_TESTS` job and one `01_DEVELOP_<repolabel>` job per repository configured. Assumed you have configured one repository with the label _myrepo_, you will see those two Jobs in ACI:
+After you have configured and run the ACI-Installation-Playbook you can access the AnsibleCI (Jenkins), which will show you at least the `03_RUN_TESTS` job and one `SCAN_<repolabel>` job per repository configured. Assumed you have configured one repository with the label _myrepo_, you will see those two Jobs in ACI:
 
 | name              | functionality                                                                                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
