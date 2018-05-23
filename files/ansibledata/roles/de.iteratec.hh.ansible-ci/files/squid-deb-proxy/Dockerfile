@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:16.04
 # with info from https://docs.diladele.com/administrator_guide_4_0/system_configuration/https_filtering/recompile_squid.html
 
 RUN sed -i 's%# deb-src%deb-src%g' /etc/apt/sources.list
@@ -21,7 +21,7 @@ RUN cd squid3* && \
 
 RUN tar czf squid.debs.tar.gz squid*.deb
 
-FROM ubuntu:latest
+FROM ubuntu:16.04
 
 COPY --from=0 /squid.debs.tar.gz /tmp/squid.debs.tar.gz
 
@@ -43,7 +43,7 @@ RUN apt-get update && \
 
 RUN tar xzf /tmp/squid.debs.tar.gz && \
     dpkg --install squid-common_3*_all.deb && \
-    dpkg --install squid_3.5.12-1ubuntu7.5_amd64.deb && \
+    dpkg --install squid_3*_amd64.deb && \
     dpkg --install squidclient_3.*_amd64.deb && \
     rm /squid*.deb
 
