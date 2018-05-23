@@ -8,13 +8,24 @@ ENV HTTP_PROXY='http://aci-squid-deb-proxy:8000'
 ENV HTTPS_PROXY='http://aci-squid-deb-proxy:8000'
 ENV FTP_PROXY='http://aci-squid-deb-proxy:8000'
 
+COPY ca.crt /tmp/ca.crt
+
 RUN if type apt-get &>/dev/null; then \
-      echo 'Acquire::HTTP::Proxy "http://aci-squid-deb-proxy:8000";' >> /etc/apt/apt.conf.d/03autoproxy; \
+      echo 'Acquire::HTTP::Proxy "http://aci-squid-deb-proxy:8000";' >> /etc/apt/apt.conf.d/03autoproxy && \
+      apt-get update && apt-get install -y ca-certificates && \
+      mv /tmp/ca.crt /usr/local/share/ca-certificates/custom-proxy.crt && \
+      update-ca-certificates; \
     elif type pacman &>/dev/null; then \
-      echo 'Configured by env'; \
+      echo 'Proxy configured by env' && \
+      mv /tmp/ca.crt /etc/ca-certificates/trust-source/anchors/proxy.crt && \
+      trust extract-compat; \
     elif type zypper &>/dev/null; then \
       echo 'Proxy not implemented yet'; \
     elif type yum &>/dev/null; then \
       echo 'proxy=http://aci-squid-deb-proxy:8000' >> /etc/yum.conf; \
       rm -f /etc/yum/pluginconf.d/fastestmirror.conf; \
+      yum install -y ca-certificates && \
+      update-ca-trust force-enable && \
+      mv /tmp/ca.crt /etc/pki/ca-trust/source/anchors/custom-proxy.crt && \
+      update-ca-trust extract; \
     fi

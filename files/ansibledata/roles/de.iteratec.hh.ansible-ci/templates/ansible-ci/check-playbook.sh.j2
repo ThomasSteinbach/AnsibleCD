@@ -323,6 +323,7 @@ function create_modified_test_image(){
   mkdir CustomAciDockerContext
   cp DockerfileAci CustomAciDockerContext/Dockerfile
   sed -i "s#IMAGENAME#${TEST_IMAGE}#g" CustomAciDockerContext/Dockerfile
+  docker run --rm ansible-ci/squid-deb-proxy get-cacert > CustomAciDockerContext/ca.crt
   docker build -t "${TEST_IMAGE}-modified" CustomAciDockerContext
   cd -
 }
