@@ -245,7 +245,9 @@ function execute_serverspec(){
     # run serverspec
     oldpath=$(pwd)
     cd aci
-    rake "spec[$specfile]"; rc=$?
+#    rake "spec[$specfile]"; rc=$?
+    echo "test ansible-ci-target-${CONTAINERPOSTFIX}"
+    inspec exec "inspec" -t "docker://ansible-ci-target-${CONTAINERPOSTFIX}"; rc=$?
     cd "$oldpath"
 
     # evaluate results
