@@ -19,7 +19,6 @@
   with_items:
     - /var/jenkins_home/users/admin
     - /var/jenkins_home/jobs/REMOVE_TARGETS
-    - /var/jenkins_home/ansible-ci/serverspec/spec
 
 - name: create nescessary directories in /var/jenkins_home on server
   file:
@@ -174,7 +173,6 @@
     - run-tests.sh
     - check-playbook.sh
     - deploy.sh
-    - serverspec/spec/spec_helper.rb
     - DockerfileAci
 
 - name: make test scripts executable

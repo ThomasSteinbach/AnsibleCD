@@ -1,7 +1,0 @@
-require 'serverspec'
-require 'docker-api'
-
-@container = Docker::Container.get('ansible-ci-target')
-
-set :backend, :docker
-set :docker_container, @container.id

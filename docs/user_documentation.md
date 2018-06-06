@@ -66,7 +66,7 @@ For Roles with multiple test playbooks configured, just the first step is execut
 
 If you have configured your roles and playbooks to be tested as described in the chapter before, the testplan from above is what you get as first result.
 
-The default testplan can be extended by configuring optional steps. On the one hand this could be executing hook shell scripts before/after the playbook executions on the other hand this could be the execution of [Serverspec](http://serverspec.org/) as final step to test if the target machine has reached the expected state described in the playbook. A fully configured testplan would look like this:
+The default testplan can be extended by configuring optional steps. On the one hand this could be executing hook shell scripts before/after the playbook executions on the other hand this could be the execution of [InSpec](https://inspec.io/) as final step to test if the target machine has reached the expected state described in the playbook. A fully configured testplan would look like this:
 
 1.  Lint all Ansible code to test for syntax errors
 2.  Run the `before-playbooks.sh` hook script
@@ -74,7 +74,7 @@ The default testplan can be extended by configuring optional steps. On the one h
 4.  Run the `between-playbooks.sh` hook script
 5.  Repeat the Playbook run on the same VM to test idempotency
 6.  Run the `after-playbooks.sh` hook script
-7.  Run Serverspec to test the results of the Playbook execution
+7.  Run Inspec to test the results of the Playbook execution
 
 ### Hooks
 
@@ -89,17 +89,17 @@ Hooks are just bash scripts to be executed before/after the playbook execution. 
 
 When executing tasks requiring root permissions within your hook scripts you can use sudo, as the vagrant user inside the VM is not prompted for passwords.
 
-### Serverspec testing
+### InSpec testing
 
-To enable Serverspec testing your Playbook, the Playbook folder must contain contain a `aci/spec` folder containing at leat one Serverspec test file ending with `_spec.rb`. For example:
+To enable InSpec testing your Playbook, the Playbook folder must contain contain a `aci/inspec` folder containing at leat one InSpec test file ending with `_spec.rb`. For example:
 
     playbook
     ├── aci
-    |   └── spec
-    |       └── default_spec.rb
+    |   └── inspec
+    |       └── default.rb
     ...
 
-The `*_spec.rb` files contain the Serverspec instructions, e.g. as follows:
+The `inspec` directory contains files with the InSpec instructions, e.g. as follows:
 
     describe package('apache2') do
       it { should be_installed }
@@ -114,7 +114,7 @@ The `*_spec.rb` files contain the Serverspec instructions, e.g. as follows:
       it { should be_listening.with('tcp6') }
     end
 
-Further information of how to write Serverspec tests see on the [official website](http://serverspec.org/).
+Further information of how to write InSpec tests see on the [official website](https://inspec.io/).
 
 ## Configuring the Lint execution
 
@@ -191,7 +191,7 @@ You can also define your custom Ansible repository to use for testing and deploy
 
 ## Create a custom Testplan
 
-In the Chapter [Configuring the testplan](#Configuring-the-testplan) we have learned that ACI is executing a testplan. We are able to configure the testplan by inserting predefined hooks and adding Serverspec tests. However we are also able to fully define our own testplan. All steps but the Linting can be defined inside the `aci/testplan` file in the playbook to test. The testplan is specific for each playbook, the linting is for the whole artifact. Thus linting is not part of the testplan and executed independently as first step.
+In the Chapter [Configuring the testplan](#Configuring-the-testplan) we have learned that ACI is executing a testplan. We are able to configure the testplan by inserting predefined hooks and adding InSpec tests. However we are also able to fully define our own testplan. All steps but the Linting can be defined inside the `aci/testplan` file in the playbook to test. The testplan is specific for each playbook, the linting is for the whole artifact. Thus linting is not part of the testplan and executed independently as first step.
 
 If we would re-define the default testplan from the [Configuring the testplan](#Configuring-the-testplan) chapter within the `aci/testplan`, it would have following appearance:
 
@@ -200,7 +200,7 @@ If we would re-define the default testplan from the [Configuring the testplan](#
     HOOK        between-playbooks
     ANSIBLE     'Repeated Run' 'IDEMPOTENCY' '--diff'
     HOOK        after-playbooks
-    SERVERSPEC
+    INSPEC
 
 Every line within the `aci/testplan` file is a test step. Every test step can have parameters, which when having whitespaces must be enclosed in single quotes. Following step types are available:
 
@@ -208,20 +208,20 @@ Every line within the `aci/testplan` file is a test step. Every test step can ha
 | ---------- | ----------------------------------------------------------- | ------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | HOOK       | filename of hook inside `aci/hooks` directory without '.sh' |                          |                 | Executes a hook script, which must be present inside the `aci` directory. The '.sh' postfix must not be given.                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ANSIBLE    | descriptive name of the step                                | grep pattern for success | Ansible options | Executes an ansible-playbook execution. The first parameter, the descriptive name of the run, is mandatory, the letter ones not. The second parameter can be a pattern which, if found with grep in the output of Ansible, means the step succeeds. An empty parameter means the Ansible run just should not fail. 'IDEMPOTENCY' is a special keyword, which creates a pattern for checking that no Ansible task has changed. The third parameter could be every possible Ansible option passed to the execution. |
-| SERVERSPEC | filename of specfile without '\_spec.rb'                    |                          |                 | Executes Serverspec. If no parameter is given, all '\*\_spec.rb' files inside the `spec` directory will be executed. If a parameter is given it woud be point to the serverspec file to execute but without the '\_spec.rb' prefix.                                                                                                                                                                                                                                                                               |
+| INSPEC     | filename of specfile without                                |                          |                 | Executes InSpec. If no parameter is given, all files inside the `inspec` directory will be executed. If a parameter is given it would be point to the InSpec file to execute.                                                                                                                                                                                                                                                                                                                                     |
 
 Another (fictional) example for a testplan file could be following:
 
     ANSIBLE     'First Run'
-    SERVERSPEC  installation
+    INSPEC      installation.rb
     HOOK        create-data
     ANSIBLE     'Do Backup'   '' '--diff --tags backuprestore --extra-vars "dcb_do_backup=true"'
-    SERVERSPEC  backup
+    INSPEC      backup.rb
     HOOK        destroy-data
     ANSIBLE     'Do Restore'  '' '--diff --tags backuprestore --extra-vars "dcb_do_restore=true"'
-    SERVERSPEC  restore
+    INSPEC      restore.rb
 
-Here we test the different behavior of the Ansible playbook depending on the `--extra-vars`. The first execution just deploys the playbook. The secend execution creates a backup and the third execution restores the backup. In between the state of the production is altered with hooks and tested with Serverspec.
+Here we test the different behavior of the Ansible playbook depending on the `--extra-vars`. The first execution just deploys the playbook. The secend execution creates a backup and the third execution restores the backup. In between the state of the production is altered with hooks and tested with InSpec.
 
 ## Configuring the test VMs
 

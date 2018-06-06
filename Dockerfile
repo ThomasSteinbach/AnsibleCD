@@ -28,7 +28,7 @@ RUN apt-get update && \
     apt-get autoremove
 
 RUN easy_install pip && \
-    gem install serverspec docker-api inspec
+    gem install docker-api inspec
 RUN pip install setuptools \
                 ansible==2.4.4.0 \
                 docker-py==1.10.6 \

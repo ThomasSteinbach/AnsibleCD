@@ -219,51 +219,47 @@ function execute_ansible(){
   rm ansibleciout.txt
 }
 
-function execute_serverspec(){
+function execute_inspec(){
 
   STEP_RESULT="$STRING_PASSED"
 
-  if [[ -d "aci/spec" ]]; then
+  if [[ -d "aci/inspec" ]]; then
 
     specfile=$1
-    if [[ ! $specfile ]]; then
-      specfile='*'
-    fi
 
     # user header
     echo -e '\n\n'
-    echo " Run Serverspec ${specfile}"
+    echo " Run InSpec ${specfile}"
     echo "==============================="
     echo ""
 
     if [[ $PLAYBOOK_FAILED = 'true' ]]; then
-      echo -e "\n-> Serverspec ${specfile} SKIPPED due to previous errors"
+      echo -e "\n-> InSpec ${specfile} SKIPPED due to previous errors"
       STEP_RESULT="$STRING_SKIPPED"
       return
     fi
 
-    # run serverspec
+    # run inspec
     oldpath=$(pwd)
     cd aci
-#    rake "spec[$specfile]"; rc=$?
     echo "test ansible-ci-target-${CONTAINERPOSTFIX}"
-    inspec exec "inspec" -t "docker://ansible-ci-target-${CONTAINERPOSTFIX}"; rc=$?
+    inspec exec "inspec/$specfile" -t "docker://ansible-ci-target-${CONTAINERPOSTFIX}"; rc=$?
     cd "$oldpath"
 
     # evaluate results
     if [[ $rc != 0 ]]; then
-        echo -e "\n-> Serverspec ${specfile} FAILED"
+        echo -e "\n-> InSpec ${specfile} FAILED"
         STEP_RESULT="$STRING_FAILED"
         PLAYBOOK_FAILED=true
     fi
   else
-    echo -e "\n-> Serverspec ${specfile} SKIPPED"
-    echo -e "-> No 'spec' directory found"
+    echo -e "\n-> InSpec ${specfile} SKIPPED"
+    echo -e "-> No 'aci/inspec' directory found"
     STEP_RESULT="$STRING_SKIPPED"
   fi
 
   if [[ $STEP_RESULT == "$STRING_PASSED" ]]; then
-    echo -e "\n-> Serverspec ${specfile} PASSED"
+    echo -e "\n-> InSpec ${specfile} PASSED"
   fi
 }
 
@@ -284,8 +280,8 @@ function run_default_testplan(){
   execute_hook after-playbooks
   CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  After-Hook: $STEP_RESULT"
 
-  execute_serverspec
-  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  Serverspec: $STEP_RESULT"
+  execute_inspec
+  CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT}\n  InSpec: $STEP_RESULT"
 }
 
 function run_custom_testplan(){
@@ -309,9 +305,9 @@ function run_custom_testplan(){
         execute_hook "${command[1]}"
         CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} Hook ${command[1]}: ${STEP_RESULT};"
         ;;
-      SERVERSPEC)
-        execute_serverspec "${command[1]}"
-        CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} Serverspec ${command[1]}: ${STEP_RESULT};"
+      INSPEC)
+        execute_inspec "${command[1]}"
+        CHECK_PLAYBOOK_RESULT="${CHECK_PLAYBOOK_RESULT} InSpec ${command[1]}: ${STEP_RESULT};"
         ;;
       *) echo "Invalid command: ${command[0]}" ;;
     esac
@@ -378,17 +374,6 @@ if [[ -f inventory ]]; then
 fi
 echo "ansible-ci-target ansible_connection=docker ansible_host=ansible-ci-target-${CONTAINERPOSTFIX}" > inventory
 
-# append requirement to head of all serverspec files
-find . -type f -name "*_spec.rb" | while read -r currentfile; do
-  sed -i "1s/^/require 'spec_helper'\n\n/" "${currentfile}"
-done
-
-# add serverspec environment
-if [[ -d aci ]] && [[ -d aci/spec ]]; then
-  cp -a "${BASEDIR}/serverspec/." aci/
-  sed -i "s#ansible-ci-target#ansible-ci-target-${CONTAINERPOSTFIX}#g" aci/spec/spec_helper.rb
-fi
-
 # PREPARATION END
 
 
@@ -429,16 +414,6 @@ for file in ./*.retry; do
     rm ./*.retry
     break
   fi
-done
-
-# remove serverspec environment
-if [[ -d aci ]] && [[ -d aci/spec ]]; then
-  rm "aci/Rakefile" "aci/spec/spec_helper.rb"
-fi
-
-# remove requirements header of all serverspec files
-find . -type f -name "*_spec.rb" | while read -r specfile; do
-  sed -i '1,2d' "${specfile}"
 done
 
 # shutdown Vagrant box
