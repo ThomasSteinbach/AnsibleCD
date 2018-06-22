@@ -65,8 +65,9 @@ function execute_hook(){
     fi
 
     chmod +x "${hook_filepath}"
-    sudo docker cp "${hook_filepath}" "ansible-ci-target-${CONTAINERPOSTFIX}:/tmp/${hook_file}.sh"
-    sudo docker exec ansible-ci-target-${CONTAINERPOSTFIX} "/tmp/${hook_file}.sh"; rc=$?
+    docker exec ansible-ci-target-${CONTAINERPOSTFIX} mkdir -p /aci
+    docker cp "${hook_filepath}" "ansible-ci-target-${CONTAINERPOSTFIX}:/aci/${hook_file}.sh"
+    docker exec ansible-ci-target-${CONTAINERPOSTFIX} "/aci/${hook_file}.sh"; rc=$?
 
     if [[ $rc != 0 ]]; then
       echo -e "\n-> Hook execution ${hook_file} FAILED"
@@ -347,7 +348,7 @@ echo -e '\n< Starting test VM... >'
 # start remote target and
 create_modified_test_image 1>/dev/null
 CONTAINERPOSTFIX="${ARTIFACT_NAME}-$(date '+%H%M%S%N')"
-sudo docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci --privileged --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro $(if [ -f aci/docker_options ]; then cat aci/docker_options; fi) "${TEST_IMAGE}-modified" 1>/dev/null
+docker run -d --name "ansible-ci-target-${CONTAINERPOSTFIX}" --net ansibleci --privileged --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro $(if [ -f aci/docker_options ]; then cat aci/docker_options; fi) "${TEST_IMAGE}-modified" 1>/dev/null
 # wait for SSH on target host available
 echo '< ...done >'
 
@@ -422,7 +423,7 @@ if [[ $KEEP_TARGET = 'true' ]]; then
   echo "<Not removing test VM as KEEP_TARGET variable in job is set to 'true'>"
 else
   echo '< Removing test VM... >'
-  sudo docker rm -vf "ansible-ci-target-${CONTAINERPOSTFIX}"
+  docker rm -vf "ansible-ci-target-${CONTAINERPOSTFIX}"
   echo '< ...done >'
 fi
 
